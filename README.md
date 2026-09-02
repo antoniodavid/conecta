@@ -98,6 +98,21 @@ go run ./cmd/cli/ status
 
 Ver [MANUAL.md#solución-de-problemas](MANUAL.md#solución-de-problemas).
 
+## Omarchy Plugin
+
+Conecta está disponible como plugin para Omarchy.
+
+```bash
+# Instalar plugin
+cd ~/.local/share/omarchy/plugins/
+git clone <repo-url> conecta
+
+# Habilitar
+omarchy plugin enable conecta.network
+```
+
+Ver [omarchy-plugin/README.md](omarchy-plugin/README.md) para detalles.
+
 ## Licencia
 
 MIT

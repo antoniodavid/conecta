@@ -1,0 +1,48 @@
+#!/bin/bash
+# omarchy:summary=Control Conecta VPN connection
+# omarchy:args=[connect|disconnect|toggle|status]
+# omarchy:hidden=true
+#
+# Manages WireGuard VPN connection for routing traffic through VPN.
+# Used by the Omarchy bar widget for quick VPN control.
+
+set -eo pipefail
+
+CONNECTA_CLI="${CONNECTA_CLI:-conecta-cli}"
+ACTION="${1:-status}"
+
+case "$ACTION" in
+  connect)
+    "$CONNECTA_CLI" vpn connect 2>/dev/null
+    echo '{"action":"connect","success":true}'
+    ;;
+  disconnect)
+    "$CONNECTA_CLI" vpn disconnect 2>/dev/null
+    echo '{"action":"disconnect","success":true}'
+    ;;
+  toggle)
+    RESULT=$("$CONNECTA_CLI" vpn toggle 2>/dev/null)
+    if echo "$RESULT" | grep -q "connected"; then
+      echo '{"action":"toggle","connected":true}'
+    else
+      echo '{"action":"toggle","connected":false}'
+    fi
+    ;;
+  status)
+    if ip link show wg0 &>/dev/null; then
+      IP=$(ip -4 addr show wg0 2>/dev/null | grep "inet " | awk '{print $2}' || echo "")
+      cat <<EOF
+{
+  "connected": true,
+  "ip": "$IP"
+}
+EOF
+    else
+      echo '{"connected":false,"ip":""}'
+    fi
+    ;;
+  *)
+    echo "Usage: $0 {connect|disconnect|toggle|status}" >&2
+    exit 1
+    ;;
+esac

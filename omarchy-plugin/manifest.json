@@ -1,0 +1,71 @@
+{
+  "schemaVersion": 1,
+  "id": "conecta.network",
+  "name": "Conecta",
+  "version": "0.1.0",
+  "author": "adruban",
+  "license": "MIT",
+  "description": "ETECSA connection manager, WiFi hotspot, and VPN control for Cuba.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Conecta",
+    "description": "Monitor and manage ETECSA internet connection, WiFi hotspot sharing, and VPN.",
+    "category": "Network",
+    "aliases": [
+      "conecta",
+      "etecsa",
+      "hotspot",
+      "vpn",
+      "cuba"
+    ],
+    "allowMultiple": false,
+    "defaults": {
+      "refreshIntervalSec": 30,
+      "showHotspot": true,
+      "showVPN": true,
+      "showSpeedTest": false,
+      "autoReconnect": true
+    },
+    "schema": [
+      {
+        "key": "refreshIntervalSec",
+        "type": "integer",
+        "label": "Refresh interval (seconds)",
+        "min": 5,
+        "max": 300,
+        "step": 5,
+        "defaultValue": 30
+      },
+      {
+        "key": "showHotspot",
+        "type": "boolean",
+        "label": "Show hotspot controls",
+        "defaultValue": true
+      },
+      {
+        "key": "showVPN",
+        "type": "boolean",
+        "label": "Show VPN controls",
+        "defaultValue": true
+      },
+      {
+        "key": "showSpeedTest",
+        "type": "boolean",
+        "label": "Show speed test button",
+        "defaultValue": false
+      },
+      {
+        "key": "autoReconnect",
+        "type": "boolean",
+        "label": "Auto-reconnect on disconnect",
+        "defaultValue": true
+      }
+    ]
+  }
+}
