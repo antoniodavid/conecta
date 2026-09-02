@@ -1,279 +1,344 @@
 import QtQuick 2.15
 import QtQuick.Layouts 1.15
-import "../../libs/omarchy/components" as Omarchy
+import Quickshell
+import Quickshell.Io
+import qs.Commons
+import qs.Ui
 
-Omarchy.PluggableWidget {
+Panel {
   id: root
+  moduleName: "conecta.network"
+  ipcTarget: "conecta.network"
+  manageIpc: false
 
-  property var status: ({})
+  property var anchorItem: null
+  property bool cursorActive: false
+
+  // Data
+  property var status: null
   property bool isOn: false
 
-  function updateStatus(json) {
-    try {
-      status = JSON.parse(json)
-      isOn = status.connection?.status === "connected" ||
-             status.connection?.status === "needs_auth"
-    } catch (e) {
-      isOn = false
+  // Paths
+  readonly property string pluginDir: Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "")
+  readonly property string statusScript: pluginDir + "/bin/omarchy-conecta-status"
+  readonly property string hotspotScript: pluginDir + "/bin/omarchy-conecta-hotspot"
+  readonly property string vpnScript: pluginDir + "/bin/omarchy-conecta-vpn"
+  readonly property string loginScript: pluginDir + "/bin/omarchy-conecta-login"
+
+  // Colors
+  readonly property color foreground: bar ? bar.foreground : "#e0e0e0"
+  readonly property color urgent: bar ? bar.urgent : "#ff4444"
+  readonly property color dim: Qt.darker(foreground, 1.55)
+  readonly property string fontFamily: bar ? bar.fontFamily : "monospace"
+
+  // Settings
+  readonly property bool showHotspot: (setting("showHotspot") ?? true) === true
+  readonly property bool showVPN: (setting("showVPN") ?? true) === true
+  readonly property bool showSpeedTest: (setting("showSpeedTest") ?? false) === true
+  readonly property int refreshInterval: Number(setting("refreshIntervalSec") ?? 30)
+
+  // ─── Status process ─────────────────────────────────────────────
+  Process {
+    id: statusProcess
+    command: ["bash", root.statusScript]
+    stdout: SplitParser {
+      onRead: data => {
+        try {
+          root.status = JSON.parse(data)
+          root.isOn = root.status.connection?.status === "connected" ||
+                      root.status.connection?.status === "needs_auth"
+        } catch (e) {}
+      }
     }
   }
 
+  // ─── Action processes ───────────────────────────────────────────
+  Process { id: hotspotProcess
+    stdout: SplitParser { onRead: data => root.refreshStatus() }
+  }
+  Process { id: vpnProcess
+    stdout: SplitParser { onRead: data => root.refreshStatus() }
+  }
+  Process { id: loginProcess
+    stdout: SplitParser { onRead: data => root.refreshStatus() }
+  }
+
+  // ─── Functions ──────────────────────────────────────────────────
   function getStatusIcon() {
     if (!isOn) return "🔴"
-    if (status.connection?.status === "needs_auth") return "🟠"
-    if (status.vpn?.connected) return "🔒"
-    if (status.hotspot?.active) return "📡"
+    if (status?.connection?.status === "needs_auth") return "🟠"
+    if (status?.vpn?.connected) return "🔒"
+    if (status?.hotspot?.active) return "📡"
     return "🟢"
   }
 
   function getStatusText() {
     if (!isOn) return "Disconnected"
-    if (status.connection?.status === "needs_auth") return "Auth needed"
-    if (status.vpn?.connected) return "VPN"
-    if (status.hotspot?.active) return "Hotspot"
+    if (status?.connection?.status === "needs_auth") return "Auth needed"
+    if (status?.vpn?.connected) return "VPN"
+    if (status?.hotspot?.active) return "Hotspot"
     return "Connected"
   }
 
-  panel: Omarchy.SmartPanel {
-    implicitWidth: 180
-
-    contentItem: RowLayout {
-      spacing: 6
-
-      Omarchy.PanelIcon {
-        icon: getStatusIcon()
-      }
-
-      ColumnLayout {
-        spacing: 0
-
-        Omarchy.PanelLabel {
-          text: getStatusText()
-          font.bold: true
-        }
-
-        Omarchy.PanelLabel {
-          text: {
-            if (status.hotspot?.active) return status.hotspot.ssid
-            if (status.vpn?.connected) return status.vpn.ip
-            return ""
-          }
-          visible: text !== ""
-          font.pixelSize: 10
-          opacity: 0.7
-        }
-      }
-    }
-
-    onClicked: popup.open()
+  function refreshStatus() {
+    statusProcess.command = ["bash", root.statusScript]
+    statusProcess.running = true
   }
 
-  popup: Omarchy.PluggablePopup {
-    width: 280
-    height: content.height + 40
+  function runHotspot(action) {
+    hotspotProcess.command = ["bash", root.hotspotScript, action]
+    hotspotProcess.running = true
+  }
+
+  function runVPN(action) {
+    vpnProcess.command = ["bash", root.vpnScript, action]
+    vpnProcess.running = true
+  }
+
+  function runLogin(action) {
+    loginProcess.command = ["bash", root.loginScript, action]
+    loginProcess.running = true
+  }
+
+  function open() {
+    root.controller.show()
+    refreshStatus()
+  }
+
+  function close() {
+    root.controller.hide()
+  }
+
+  function toggle() {
+    if (root.opened) close(); else open()
+  }
+
+  // ─── Bar widget ─────────────────────────────────────────────────
+  bar: RowLayout {
+    spacing: 6
+
+    Text {
+      text: getStatusIcon()
+      font.family: root.fontFamily
+      font.pixelSize: 14
+    }
+
+    Text {
+      text: getStatusText()
+      font.family: root.fontFamily
+      font.pixelSize: 12
+      color: root.foreground
+    }
+
+    Text {
+      text: {
+        if (status?.hotspot?.active) return status.hotspot.ssid
+        if (status?.vpn?.connected) return status.vpn.ip
+        return ""
+      }
+      visible: text !== ""
+      font.family: root.fontFamily
+      font.pixelSize: 10
+      color: root.dim
+    }
+  }
+
+  // ─── Popup panel ────────────────────────────────────────────────
+  popup: PanelPopup {
+    implicitWidth: 280
+    implicitHeight: content.height + 30
 
     ColumnLayout {
       id: content
       anchors.fill: parent
       anchors.margins: 15
-      spacing: 12
+      spacing: 10
 
       // Header
-      Omarchy.PanelLabel {
+      Text {
         text: "📡 Conecta"
+        font.family: root.fontFamily
         font.pixelSize: 16
         font.bold: true
+        color: root.foreground
         Layout.fillWidth: true
       }
 
-      // Connection Status
-      Rectangle {
-        Layout.fillWidth: true
-        height: 3
-        color: "transparent"
-      }
+      Rectangle { Layout.fillWidth: true; height: 1; color: "#333" }
 
-      Omarchy.PanelLabel {
+      // Connection
+      Text {
         text: "Connection"
+        font.family: root.fontFamily
+        font.pixelSize: 12
         font.bold: true
+        color: root.foreground
         Layout.fillWidth: true
       }
 
       RowLayout {
         Layout.fillWidth: true
-
-        Omarchy.PanelLabel {
+        Text {
           text: "Status:"
+          font.family: root.fontFamily
+          font.pixelSize: 12
+          color: root.dim
           Layout.fillWidth: true
         }
-
-        Omarchy.PanelLabel {
-          text: status.connection?.status || "unknown"
+        Text {
+          text: status?.connection?.status || "unknown"
+          font.family: root.fontFamily
+          font.pixelSize: 12
           font.bold: true
-          color: status.connection?.status === "connected" ? "#00ff88" :
-                 status.connection?.status === "needs_auth" ? "#ffcc00" : "#ff4444"
+          color: status?.connection?.status === "connected" ? "#00ff88" :
+                 status?.connection?.status === "needs_auth" ? "#ffcc00" : "#ff4444"
         }
       }
 
-      // Login/Logout buttons
+      // Login / Logout buttons
       RowLayout {
         Layout.fillWidth: true
         spacing: 8
+        visible: status?.connection?.status === "needs_auth"
 
-        Omarchy.PanelButton {
+        PanelButton {
           text: "Login"
           Layout.fillWidth: true
-          visible: status.connection?.status === "needs_auth"
-          onClicked: {
-            root.exec("omarchy-conecta-login", ["login"])
-            root.refresh()
-          }
+          onClicked: runLogin("login")
         }
+      }
 
-        Omarchy.PanelButton {
+      RowLayout {
+        Layout.fillWidth: true
+        spacing: 8
+        visible: status?.connection?.status === "connected"
+
+        PanelButton {
           text: "Logout"
           Layout.fillWidth: true
-          visible: status.connection?.status === "connected"
-          onClicked: {
-            root.exec("omarchy-conecta-login", ["logout"])
-            root.refresh()
-          }
+          onClicked: runLogin("logout")
         }
       }
 
       // Separator
-      Rectangle {
-        Layout.fillWidth: true
-        height: 1
-        color: "#333"
-      }
+      Rectangle { Layout.fillWidth: true; height: 1; color: "#333"; visible: root.showHotspot }
 
       // Hotspot
-      Omarchy.PanelLabel {
-        text: "Hotspot"
-        font.bold: true
-        Layout.fillWidth: true
-        visible: root.config.showHotspot ?? true
-      }
+      ColumnLayout {
+        spacing: 6
+        visible: root.showHotspot
 
-      RowLayout {
-        Layout.fillWidth: true
-        visible: root.config.showHotspot ?? true
-
-        Omarchy.PanelLabel {
-          text: "Status:"
-          Layout.fillWidth: true
-        }
-
-        Omarchy.PanelLabel {
-          text: status.hotspot?.active ? "Active" : "Inactive"
+        Text {
+          text: "Hotspot"
+          font.family: root.fontFamily
+          font.pixelSize: 12
           font.bold: true
-          color: status.hotspot?.active ? "#00ff88" : "#666"
-        }
-      }
-
-      RowLayout {
-        Layout.fillWidth: true
-        visible: status.hotspot?.active && (root.config.showHotspot ?? true)
-
-        Omarchy.PanelLabel {
-          text: "Clients:"
+          color: root.foreground
           Layout.fillWidth: true
         }
 
-        Omarchy.PanelLabel {
-          text: status.hotspot?.clients?.toString() || "0"
-        }
-      }
-
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: 8
-        visible: root.config.showHotspot ?? true
-
-        Omarchy.PanelButton {
-          text: status.hotspot?.active ? "Stop" : "Start"
+        RowLayout {
           Layout.fillWidth: true
-          onClicked: {
-            root.exec("omarchy-conecta-hotspot", [status.hotspot?.active ? "stop" : "start"])
-            root.refresh()
+          Text {
+            text: "Status:"
+            font.family: root.fontFamily
+            font.pixelSize: 12
+            color: root.dim
+            Layout.fillWidth: true
           }
+          Text {
+            text: status?.hotspot?.active ? "Active" : "Inactive"
+            font.family: root.fontFamily
+            font.pixelSize: 12
+            font.bold: true
+            color: status?.hotspot?.active ? "#00ff88" : "#666"
+          }
+        }
+
+        RowLayout {
+          Layout.fillWidth: true
+          visible: status?.hotspot?.active
+          Text {
+            text: "Clients:"
+            font.family: root.fontFamily
+            font.pixelSize: 12
+            color: root.dim
+            Layout.fillWidth: true
+          }
+          Text {
+            text: (status?.hotspot?.clients ?? 0).toString()
+            font.family: root.fontFamily
+            font.pixelSize: 12
+            color: root.foreground
+          }
+        }
+
+        PanelButton {
+          text: status?.hotspot?.active ? "Stop Hotspot" : "Start Hotspot"
+          Layout.fillWidth: true
+          onClicked: runHotspot(status?.hotspot?.active ? "stop" : "start")
         }
       }
 
       // Separator
-      Rectangle {
-        Layout.fillWidth: true
-        height: 1
-        color: "#333"
-        visible: root.config.showVPN ?? true
-      }
+      Rectangle { Layout.fillWidth: true; height: 1; color: "#333"; visible: root.showVPN }
 
       // VPN
-      Omarchy.PanelLabel {
-        text: "VPN"
-        font.bold: true
-        Layout.fillWidth: true
-        visible: root.config.showVPN ?? true
-      }
+      ColumnLayout {
+        spacing: 6
+        visible: root.showVPN
 
-      RowLayout {
-        Layout.fillWidth: true
-        visible: root.config.showVPN ?? true
-
-        Omarchy.PanelLabel {
-          text: "Status:"
-          Layout.fillWidth: true
-        }
-
-        Omarchy.PanelLabel {
-          text: status.vpn?.connected ? "Connected" : "Disconnected"
+        Text {
+          text: "VPN"
+          font.family: root.fontFamily
+          font.pixelSize: 12
           font.bold: true
-          color: status.vpn?.connected ? "#00ff88" : "#666"
-        }
-      }
-
-      RowLayout {
-        Layout.fillWidth: true
-        spacing: 8
-        visible: root.config.showVPN ?? true
-
-        Omarchy.PanelButton {
-          text: status.vpn?.connected ? "Disconnect" : "Connect"
+          color: root.foreground
           Layout.fillWidth: true
-          onClicked: {
-            root.exec("omarchy-conecta-vpn", ["toggle"])
-            root.refresh()
+        }
+
+        RowLayout {
+          Layout.fillWidth: true
+          Text {
+            text: "Status:"
+            font.family: root.fontFamily
+            font.pixelSize: 12
+            color: root.dim
+            Layout.fillWidth: true
           }
+          Text {
+            text: status?.vpn?.connected ? "Connected" : "Disconnected"
+            font.family: root.fontFamily
+            font.pixelSize: 12
+            font.bold: true
+            color: status?.vpn?.connected ? "#00ff88" : "#666"
+          }
+        }
+
+        PanelButton {
+          text: status?.vpn?.connected ? "Disconnect VPN" : "Connect VPN"
+          Layout.fillWidth: true
+          onClicked: runVPN("toggle")
         }
       }
 
       // Speed Test
-      RowLayout {
+      PanelButton {
+        text: "Speed Test"
         Layout.fillWidth: true
-        visible: root.config.showSpeedTest ?? false
-
-        Omarchy.PanelButton {
-          text: "Speed Test"
-          Layout.fillWidth: true
-          onClicked: {
-            root.exec("omarchy-conecta-login", ["speed"])
-          }
-        }
+        visible: root.showSpeedTest
+        onClicked: runLogin("speed")
       }
     }
   }
 
-  Component.onCompleted: refresh()
+  // ─── Init ───────────────────────────────────────────────────────
+  Component.onCompleted: refreshStatus()
 
   Timer {
-    interval: (root.config.refreshIntervalSec ?? 30) * 1000
+    interval: root.refreshInterval * 1000
     running: true
     repeat: true
-    onTriggered: root.refresh()
-  }
-
-  function refresh() {
-    root.exec("omarchy-conecta-status", [], updateStatus)
+    onTriggered: root.refreshStatus()
   }
 }
