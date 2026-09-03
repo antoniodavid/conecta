@@ -52,11 +52,11 @@ Panel {
   // ─── Icon functions (nerd font like network plugin) ─────────────
   function getStatusIcon() {
     if (!isOn) return "󰤮"  // Disconnected
-    if (status?.connection?.status === "needs_auth") return "󰤯"  // Needs auth
-    if (status?.vpn?.connected) return "󰲝"  // VPN connected
-    if (status?.hotspot?.active) return "󰤨"  // Hotspot active
+    if ((status && status.connection && status.connection.status) === "needs_auth") return "󰤯"  // Needs auth
+    if ((status && status.vpn && status.vpn.connected)) return "󰲝"  // VPN connected
+    if ((status && status.hotspot && status.hotspot.active)) return "󰤨"  // Hotspot active
     // WiFi connected - use signal strength
-    return getWifiIcon(status?.connection?.signal ?? 0)
+    return getWifiIcon((status && status.connection && status.connection.signal !== undefined && status.connection.signal !== null ? status.connection.signal : 0))
   }
 
   function getWifiIcon(signalStrength) {
@@ -68,10 +68,10 @@ Panel {
 
   function getStatusText() {
     if (!isOn) return "Disconnected"
-    if (status?.connection?.status === "needs_auth") return "Auth needed"
-    if (status?.vpn?.connected) return "VPN"
-    if (status?.hotspot?.active) return "Hotspot"
-    return status?.connection?.ssid || "Connected"
+    if ((status && status.connection && status.connection.status) === "needs_auth") return "Auth needed"
+    if ((status && status.vpn && status.vpn.connected)) return "VPN"
+    if ((status && status.hotspot && status.hotspot.active)) return "Hotspot"
+    return (status && status.connection && status.connection.ssid) || "Connected"
   }
 
   // ─── Status process ─────────────────────────────────────────────
@@ -122,8 +122,8 @@ Panel {
       return;
     }
     root.status = doc;
-    root.isOn = doc.connection?.status === "connected" ||
-                doc.connection?.status === "needs_auth";
+    root.isOn = (doc.connection && doc.connection.status) === "connected" ||
+                (doc.connection && doc.connection.status) === "needs_auth";
   }
 
   // handleAction stores a human-readable action/speed result, then refreshes.
@@ -260,12 +260,12 @@ Panel {
             }
 
             Text {
-              text: status?.connection?.status || "unknown"
+              text: (status && status.connection && status.connection.status) || "unknown"
               font.family: root.fontFamily
               font.pixelSize: 12
               font.bold: true
-              color: status?.connection?.status === "connected" ? "#00ff88" :
-                     status?.connection?.status === "needs_auth" ? "#ffcc00" : "#ff4444"
+              color: (status && status.connection && status.connection.status) === "connected" ? "#00ff88" :
+                     (status && status.connection && status.connection.status) === "needs_auth" ? "#ffcc00" : "#ff4444"
             }
           }
 
@@ -407,11 +407,11 @@ Panel {
             }
 
             Text {
-              text: status?.hotspot?.active ? "Active" : "Inactive"
+              text: (status && status.hotspot && status.hotspot.active) ? "Active" : "Inactive"
               font.family: root.fontFamily
               font.pixelSize: 12
               font.bold: true
-              color: status?.hotspot?.active ? "#00ff88" : "#666"
+              color: (status && status.hotspot && status.hotspot.active) ? "#00ff88" : "#666"
             }
           }
 
@@ -452,7 +452,7 @@ Panel {
             }
 
             Text {
-              text: (status?.hotspot?.clients ?? 0).toString()
+              text: (status && status.hotspot && status.hotspot.clients !== undefined && status.hotspot.clients !== null ? status.hotspot.clients : 0).toString()
               font.family: root.fontFamily
               font.pixelSize: 12
               color: root.foreground
@@ -471,24 +471,24 @@ Panel {
               spacing: 8
 
               Text {
-                text: status?.hotspot?.active ? "󰦞" : "󰝨"  // Stop/Start icon
+                text: (status && status.hotspot && status.hotspot.active) ? "󰦞" : "󰝨"  // Stop/Start icon
                 font.family: root.fontFamily
                 font.pixelSize: 14
-                color: status?.hotspot?.active ? "#ff4444" : "#00ff88"
+                color: (status && status.hotspot && status.hotspot.active) ? "#ff4444" : "#00ff88"
               }
 
               Text {
-                text: status?.hotspot?.active ? "Stop Hotspot" : "Start Hotspot"
+                text: (status && status.hotspot && status.hotspot.active) ? "Stop Hotspot" : "Start Hotspot"
                 font.family: root.fontFamily
                 font.pixelSize: 12
-                color: status?.hotspot?.active ? "#ff4444" : "#00ff88"
+                color: (status && status.hotspot && status.hotspot.active) ? "#ff4444" : "#00ff88"
               }
             }
 
             MouseArea {
               anchors.fill: parent
               cursorShape: Qt.PointingHandCursor
-              onClicked: root.runHotspot(status?.hotspot?.active ? "stop" : "start")
+              onClicked: root.runHotspot((status && status.hotspot && status.hotspot.active) ? "stop" : "start")
             }
           }
         }
@@ -518,11 +518,11 @@ Panel {
             }
 
             Text {
-              text: status?.vpn?.connected ? "Connected" : "Disconnected"
+              text: (status && status.vpn && status.vpn.connected) ? "Connected" : "Disconnected"
               font.family: root.fontFamily
               font.pixelSize: 12
               font.bold: true
-              color: status?.vpn?.connected ? "#00ff88" : "#666"
+              color: (status && status.vpn && status.vpn.connected) ? "#00ff88" : "#666"
             }
           }
 
@@ -560,17 +560,17 @@ Panel {
               spacing: 8
 
               Text {
-                text: status?.vpn?.connected ? "󰦴" : "󰲜"  // Disconnect/Connect icon
+                text: (status && status.vpn && status.vpn.connected) ? "󰦴" : "󰲜"  // Disconnect/Connect icon
                 font.family: root.fontFamily
                 font.pixelSize: 14
-                color: status?.vpn?.connected ? "#ff4444" : "#00ff88"
+                color: (status && status.vpn && status.vpn.connected) ? "#ff4444" : "#00ff88"
               }
 
               Text {
-                text: status?.vpn?.connected ? "Disconnect VPN" : "Connect VPN"
+                text: (status && status.vpn && status.vpn.connected) ? "Disconnect VPN" : "Connect VPN"
                 font.family: root.fontFamily
                 font.pixelSize: 12
-                color: status?.vpn?.connected ? "#ff4444" : "#00ff88"
+                color: (status && status.vpn && status.vpn.connected) ? "#ff4444" : "#00ff88"
               }
             }
 
