@@ -65,14 +65,22 @@ func printUsage() {
 	fmt.Println(helpText)
 }
 
-// rejectSubcommandFlags ensures --user/--pass only bind to login.
-func rejectSubcommandFlags(cmd string, args []string) {
+// hasLoginFlags reports whether args contain the login-only --user/--pass flags.
+func hasLoginFlags(args []string) bool {
 	for _, a := range args {
 		if a == "--user" || strings.HasPrefix(a, "--user=") ||
 			a == "--pass" || strings.HasPrefix(a, "--pass=") {
-			fmt.Fprintf(os.Stderr, "--user/--pass only apply to login\n")
-			emitError("invalid_input", "--user/--pass only apply to login")
+			return true
 		}
+	}
+	return false
+}
+
+// rejectSubcommandFlags ensures --user/--pass only bind to login.
+func rejectSubcommandFlags(cmd string, args []string) {
+	if hasLoginFlags(args) {
+		fmt.Fprintf(os.Stderr, "--user/--pass only apply to login\n")
+		emitError("invalid_input", "--user/--pass only apply to login")
 	}
 }
 
@@ -148,22 +156,31 @@ func cmdStatus(cfg *config.Config) {
 	})
 }
 
-func cmdLogin(cfg *config.Config, args []string) {
+// parseLoginFlags binds --user/--pass to the login subcommand via its own FlagSet.
+// Empty values mean "fall back to configured credentials"; rest holds positionals.
+func parseLoginFlags(args []string) (user, pass string, rest []string, err error) {
 	fs := flag.NewFlagSet("login", flag.ContinueOnError)
-	user := fs.String("user", "", "Username")
-	pass := fs.String("pass", "", "Password")
+	u := fs.String("user", "", "Username")
+	p := fs.String("pass", "", "Password")
 	// Flag errors go to stderr; contract failure goes to stdout with exit 2.
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil {
+		return "", "", nil, err
+	}
+	return *u, *p, fs.Args(), nil
+}
+
+func cmdLogin(cfg *config.Config, args []string) {
+	u, p, extra, err := parseLoginFlags(args)
+	if err != nil {
 		emitError("invalid_input", fmt.Sprintf("invalid login flags: %v", err))
 		return
 	}
-	if fs.NArg() > 0 {
-		emitError("invalid_input", fmt.Sprintf("unexpected login args: %v", fs.Args()))
+	if len(extra) > 0 {
+		emitError("invalid_input", fmt.Sprintf("unexpected login args: %v", extra))
 		return
 	}
 
-	u, p := *user, *pass
 	if u == "" {
 		u = cfg.Credentials.Username
 	}

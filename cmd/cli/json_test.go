@@ -79,3 +79,69 @@ func TestEnvelopeExitMapping(t *testing.T) {
 		t.Fatalf("authz must map to exit 4")
 	}
 }
+
+// Login flags bind to the login subcommand only (per-subcommand FlagSets).
+// Note: rejectSubcommandFlags itself calls emitError (os.Exit), so the
+// non-login side asserts hasLoginFlags — the exact predicate production
+// uses — rather than invoking the exiting path.
+func TestLoginFlagsBindToLoginOnly(t *testing.T) {
+	t.Run("login binds user/pass flags", func(t *testing.T) {
+		cases := []struct {
+			name     string
+			args     []string
+			wantUser string
+			wantPass string
+			wantErr  bool
+			wantRest int
+		}{
+			{"space separated", []string{"--user", "alice", "--pass", "s3cret"}, "alice", "s3cret", false, 0},
+			{"equals form", []string{"--user=bob", "--pass=hunter2"}, "bob", "hunter2", false, 0},
+			{"no flags falls back to config", nil, "", "", false, 0},
+			{"unknown flag rejected", []string{"--token", "x"}, "", "", true, 0},
+			{"missing value rejected", []string{"--user"}, "", "", true, 0},
+			{"positionals surfaced as rest", []string{"--user", "alice", "extra"}, "alice", "", false, 1},
+		}
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				user, pass, rest, err := parseLoginFlags(tt.args)
+				if tt.wantErr {
+					if err == nil {
+						t.Fatalf("parseLoginFlags(%v) err = nil, want error", tt.args)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("parseLoginFlags(%v) err = %v, want nil", tt.args, err)
+				}
+				if user != tt.wantUser || pass != tt.wantPass {
+					t.Fatalf("parseLoginFlags(%v) = (%q, %q), want (%q, %q)", tt.args, user, pass, tt.wantUser, tt.wantPass)
+				}
+				if len(rest) != tt.wantRest {
+					t.Fatalf("parseLoginFlags(%v) rest = %v, want %d leftover", tt.args, rest, tt.wantRest)
+				}
+			})
+		}
+	})
+
+	t.Run("other subcommands reject login flags", func(t *testing.T) {
+		cases := []struct {
+			name         string
+			args         []string
+			wantRejected bool
+		}{
+			{"status clean", []string{}, false},
+			{"status with user flag", []string{"--user", "alice"}, true},
+			{"status with user equals", []string{"--user=alice"}, true},
+			{"logout with pass flag", []string{"--pass", "s3cret"}, true},
+			{"speed with pass equals", []string{"--pass=s3cret"}, true},
+			{"similar prefix not a login flag", []string{"--username", "alice"}, false},
+		}
+		for _, tt := range cases {
+			t.Run(tt.name, func(t *testing.T) {
+				if got := hasLoginFlags(tt.args); got != tt.wantRejected {
+					t.Fatalf("hasLoginFlags(%v) = %v, want %v", tt.args, got, tt.wantRejected)
+				}
+			})
+		}
+	})
+}

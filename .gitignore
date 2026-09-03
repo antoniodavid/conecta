@@ -1,2 +1,5 @@
 # Local Pi runtime state
 .atl/
+
+# Built binaries stay out of the repo
+/bin/conecta-cli
