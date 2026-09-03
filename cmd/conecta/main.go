@@ -97,13 +97,18 @@ func NewModel(cfg *config.Config) Model {
 }
 
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(
+	cmds := []tea.Cmd{
 		m.checkNetwork(),
 		m.checkVPN(),
+		m.checkHotspot(),
 		tea.Tick(time.Duration(m.cfg.UI.RefreshSec)*time.Second, func(time.Time) tea.Msg {
 			return refreshTickMsg{}
 		}),
-	)
+	}
+	if login := m.autoLogin(); login != nil {
+		cmds = append(cmds, login)
+	}
+	return tea.Batch(cmds...)
 }
 
 // ─── Messages ────────────────────────────────────────────────────────────────
@@ -129,6 +134,11 @@ type actionResultMsg struct {
 // ─── Update ──────────────────────────────────────────────────────────────────
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Expire transient messages first: every path below may return early.
+	if m.statusMsg != "" && time.Now().After(m.statusExp) {
+		m.statusMsg = ""
+	}
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		return m.handleKey(msg)
@@ -137,6 +147,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(
 			m.checkNetwork(),
 			m.checkVPN(),
+			m.checkHotspot(),
 			tea.Tick(time.Duration(m.cfg.UI.RefreshSec)*time.Second, func(time.Time) tea.Msg {
 				return refreshTickMsg{}
 			}),
@@ -180,11 +191,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Clear status message
-	if m.statusMsg != "" && time.Now().After(m.statusExp) {
-		m.statusMsg = ""
-	}
-
 	return m, nil
 }
 
@@ -220,7 +226,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, m.setupNAT()
 		}
 	case "r":
-		return m, m.checkNetwork()
+		return m, tea.Batch(m.checkNetwork(), m.checkVPN(), m.checkHotspot())
 	}
 
 	return m, nil
@@ -242,24 +248,54 @@ func (m Model) checkVPN() tea.Cmd {
 	}
 }
 
-func (m Model) startHotspot() tea.Cmd {
+func (m Model) checkHotspot() tea.Cmd {
 	return func() tea.Msg {
-		err := m.hotspot.Start()
-		if err != nil {
-			return actionResultMsg{success: false, message: "Failed to start: " + err.Error()}
-		}
-		return actionResultMsg{success: true, message: "Hotspot started"}
+		status, err := m.hotspot.Status()
+		return hotspotStatusMsg{status: status, err: err}
 	}
 }
 
-func (m Model) stopHotspot() tea.Cmd {
-	return func() tea.Msg {
-		err := m.hotspot.Stop()
-		if err != nil {
-			return actionResultMsg{success: false, message: "Failed to stop: " + err.Error()}
-		}
-		return actionResultMsg{success: true, message: "Hotspot stopped"}
+// autoLogin performs a real portal login once at startup when credentials are
+// configured. It returns nil when there is nothing to log in with.
+func (m Model) autoLogin() tea.Cmd {
+	user := m.cfg.Credentials.Username
+	pass := m.cfg.Credentials.Password
+	if user == "" || pass == "" {
+		return nil
 	}
+	return func() tea.Msg {
+		conn, err := m.portal.Login(user, pass)
+		if err != nil {
+			return actionResultMsg{success: false, message: "Auto-login failed: " + err.Error()}
+		}
+		return actionResultMsg{success: true, message: "Auto-login: " + conn.Status.String()}
+	}
+}
+
+func (m Model) startHotspot() tea.Cmd {
+	return tea.Batch(
+		func() tea.Msg {
+			err := m.hotspot.Start()
+			if err != nil {
+				return actionResultMsg{success: false, message: "Failed to start: " + err.Error()}
+			}
+			return actionResultMsg{success: true, message: "Hotspot started"}
+		},
+		m.checkHotspot(),
+	)
+}
+
+func (m Model) stopHotspot() tea.Cmd {
+	return tea.Batch(
+		func() tea.Msg {
+			err := m.hotspot.Stop()
+			if err != nil {
+				return actionResultMsg{success: false, message: "Failed to stop: " + err.Error()}
+			}
+			return actionResultMsg{success: true, message: "Hotspot stopped"}
+		},
+		m.checkHotspot(),
+	)
 }
 
 func (m Model) toggleVPN() tea.Cmd {

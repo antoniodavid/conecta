@@ -48,7 +48,7 @@ Uso: conecta-cli <comando> [opciones]
   conecta-cli login
 
   # Login con credenciales explícitas
-  conecta-cli login --user 225823788119@nautaplus --pass xxx
+  conecta-cli login --user TU_USUARIO --pass TU_CONTRASEÑA
 
   # Cerrar sesión
   conecta-cli logout

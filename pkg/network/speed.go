@@ -1,8 +1,8 @@
 package network
 
 import (
-	"crypto/tls"
 	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
@@ -15,10 +15,10 @@ type SpeedTest struct {
 
 // NewSpeedTest creates a new speed test handler
 func NewSpeedTest() *SpeedTest {
+	// TLS certificates are verified by default.
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 		Transport: &http.Transport{
-			TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
 			MaxIdleConns:        10,
 			MaxIdleConnsPerHost: 10,
 		},
@@ -48,35 +48,39 @@ func (st *SpeedTest) Run() *SpeedResult {
 		Duration:      0,
 	}
 
+	if len(st.urls) == 0 {
+		result.Error = fmt.Errorf("no speed test URLs configured")
+		return result
+	}
+
 	start := time.Now()
-	totalBytes := 0
 
 	var lastErr error
+	succeeded := false
+	totalBytes := 0
+	var serverURL string
 	for _, u := range st.urls {
-		resp, err := st.client.Get(u)
-		if err != nil {
-			lastErr = err
+		n, urlErr := st.fetchOne(u)
+		if urlErr != nil {
+			lastErr = urlErr
 			continue
 		}
-
-		buf := make([]byte, 32*1024)
-		for {
-			n, err := resp.Body.Read(buf)
-			totalBytes += n
-			if err != nil {
-				break
-			}
-		}
-		resp.Body.Close()
-		break // Success, stop trying
+		totalBytes = n
+		serverURL = u
+		succeeded = true
+		break
 	}
 
 	elapsed := time.Since(start)
 	result.Duration = elapsed
 	result.BytesDownload = uint64(totalBytes)
+	result.ServerURL = serverURL
 
-	if totalBytes == 0 {
-		result.Error = fmt.Errorf("no data downloaded: %w", lastErr)
+	if !succeeded {
+		if lastErr == nil {
+			lastErr = fmt.Errorf("no data downloaded")
+		}
+		result.Error = lastErr
 		return result
 	}
 
@@ -87,6 +91,44 @@ func (st *SpeedTest) Run() *SpeedResult {
 	}
 
 	return result
+}
+
+// fetchOne downloads a single URL. Only a clean EOF with a 2xx status counts
+// as success; bad statuses and truncated bodies are rejected.
+func (st *SpeedTest) fetchOne(u string) (int, error) {
+	if u == "" {
+		return 0, fmt.Errorf("empty speed test URL")
+	}
+	resp, err := st.client.Get(u)
+	if err != nil {
+		return 0, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 4096))
+		return 0, fmt.Errorf("speed test bad status: %s", resp.Status)
+	}
+
+	buf := make([]byte, 32*1024)
+	total := 0
+	for {
+		n, rerr := resp.Body.Read(buf)
+		total += n
+		if rerr != nil {
+			if rerr == io.EOF {
+				break
+			}
+			// Truncated body or any other read failure is rejected.
+			return 0, fmt.Errorf("speed test truncated read: %w", rerr)
+		}
+	}
+	if resp.ContentLength > 0 && int64(total) != resp.ContentLength {
+		return 0, fmt.Errorf("speed test partial read: got %d of %d bytes", total, resp.ContentLength)
+	}
+	if total == 0 {
+		return 0, fmt.Errorf("speed test empty body")
+	}
+	return total, nil
 }
 
 // FormatSpeed formats speed result for display

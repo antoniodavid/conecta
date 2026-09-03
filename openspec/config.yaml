@@ -1,0 +1,32 @@
+# SDD Configuration — conecta
+context: >
+  Go 1.24 CLI/TUI application using Bubbletea for interactive terminal UI.
+  Manages VPN connections, Wi-Fi hotspot, and network portal detection.
+  Single Go module with cmd/ (3 binaries), pkg/ (config, hotspot, network, vpn),
+  internal/ (poll, tui), and an omarchy-plugin/ QML panel.
+
+strict_tdd: true
+
+testing:
+  workspace_test_command: "go test ./..."
+  projects:
+    - path: "."
+      stack: "Go 1.24"
+      test_command: "go test ./..."
+      coverage_command: "go test -cover ./..."
+      linter: "go vet ./..."
+      type_checker: "go build ./..."
+      formatter: "gofmt"
+      test_layers:
+        unit: true
+        integration: false
+        e2e: false
+
+phases:
+  proposal: "Read current state; propose change with rationale"
+  spec: "Delta specs with acceptance criteria and scenarios"
+  design: "Technical design with file-level plan"
+  tasks: "Break into implementation tasks with dependencies"
+  apply: "Implement tasks; run tests after each work unit"
+  verify: "Run tests, vet, build; compare against spec"
+  archive: "Summarize change and persist final state"

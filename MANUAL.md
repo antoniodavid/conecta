@@ -26,6 +26,11 @@
 - Linux con interfaz ethernet (para ETECSA)
 - Interfaz WiFi (para hotspot)
 - WireGuard (para VPN, opcional)
+- Herramientas del sistema según la función usada:
+  - `iw` — detección de WiFi y clientes del hotspot
+  - `create_ap` + `systemctl` — servicio del hotspot
+  - `iptables` + `sudo` — NAT para clientes del hotspot
+  - `jq` — plugin de Omarchy (los adaptadores construyen JSON con `jq`)
 
 ### Compilar desde código fuente
 
@@ -54,6 +59,33 @@ conecta-cli help
 conecta-cli status
 ```
 
+### Privilegios y autorización no interactiva
+
+Las acciones privilegiadas (hotspot, NAT, VPN) requieren autorización
+previamente configurada: el CLI verifica `sudo -n true` **antes** de
+cualquier paso destructivo y falla cerrado (código de salida `4`,
+sin modificar el host) cuando la autorización falta o es denegada.
+Un widget de barra no tiene forma de pedir contraseña, por lo que las
+acciones de hotspot/NAT/VPN lanzadas desde la barra quedan deshabilitadas
+hasta que exista una configuración autorizada (por ejemplo, una entrada
+NOPASSWD de sudoers instalada por root para los comandos documentados).
+Las operaciones de solo lectura (`status`, clientes) y el login al portal
+no requieren privilegios.
+
+Propiedad de la instalación:
+
+```bash
+# Binarios de usuario: pertenecen al usuario, sin setuid
+mkdir -p ~/.local/bin
+cp ~/conecta/bin/* ~/.local/bin/
+
+# Alternativa global: root es dueño de /usr/local/bin
+sudo cp ~/conecta/bin/* /usr/local/bin/
+```
+
+El archivo `~/.config/conecta/config.yaml` puede contener credenciales y
+se guarda con permisos `0600` (solo el dueño lo lee).
+
 ---
 
 ## Configuración
@@ -71,8 +103,8 @@ network:
 
 # Configuración de hotspot
 hotspot:
-  ssid: RUBAN_WIFI             # Nombre de la red WiFi
-  passphrase: Bunker.871217    # Contraseña del hotspot
+  ssid: MI_RED_WIFI             # Nombre de la red WiFi
+  passphrase: CAMBIA-ESTA-CLAVE-SEGURA  # Contraseña del hotspot (mínimo 8 caracteres)
   channel: default             # Canal WiFi (default/auto)
   freq_band: "2.4"            # Banda de frecuencia (2.4 o 5)
   method: nat                  # Método de compartir (nat/bridge)
@@ -92,8 +124,8 @@ ui:
 
 # Credenciales (opcional, se pueden pasar por CLI)
 credentials:
-  username: 225823788119@nautaplus
-  password: Centella.87
+  username: TU_USUARIO
+  password: TU_CONTRASEÑA
 ```
 
 ### Editar configuración
@@ -120,7 +152,7 @@ conecta-cli status
 conecta-cli login
 
 # 3. O con credenciales explícitas
-conecta-cli login --user 225823788119@nautaplus --pass xxx
+conecta-cli login --user TU_USUARIO --pass TU_CONTRASEÑA
 
 # 4. Verificar conexión
 conecta-cli status
@@ -249,8 +281,8 @@ hotspot
 El hotspot utiliza `create_ap` para crear un punto de acceso WiFi.
 
 **Configuración por defecto:**
-- SSID: `RUBAN_WIFI`
-- Contraseña: `Bunker.871217`
+- SSID: `MI_RED_WIFI`
+- Contraseña: `CAMBIA-ESTA-CLAVE-SEGURA` (cámbiala en `~/.config/conecta/config.yaml`)
 - Canal: automático
 - Banda: 2.4 GHz
 - Método: NAT

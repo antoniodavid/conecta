@@ -5,6 +5,7 @@ type Status struct {
 	Connected      bool
 	IP             string
 	ConnectionName string
+	Interface      string
 }
 
 // Config holds VPN configuration

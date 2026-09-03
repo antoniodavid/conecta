@@ -29,8 +29,7 @@
       "refreshIntervalSec": 30,
       "showHotspot": true,
       "showVPN": true,
-      "showSpeedTest": false,
-      "autoReconnect": true
+      "showSpeedTest": false
     },
     "schema": [
       {
@@ -59,12 +58,6 @@
         "type": "boolean",
         "label": "Show speed test button",
         "defaultValue": false
-      },
-      {
-        "key": "autoReconnect",
-        "type": "boolean",
-        "label": "Auto-reconnect on disconnect",
-        "defaultValue": true
       }
     ]
   }

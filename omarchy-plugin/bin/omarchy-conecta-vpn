@@ -3,46 +3,29 @@
 # omarchy:args=[connect|disconnect|toggle|status]
 # omarchy:hidden=true
 #
-# Manages WireGuard VPN connection for routing traffic through VPN.
-# Used by the Omarchy bar widget for quick VPN control.
+# Thin adapter over conecta-cli: passes CLI stdout through verbatim and
+# propagates its exit status unchanged. Never synthesizes success.
+# The VPN interface comes from the CLI (user config), never hardcoded here.
+# Contract: one JSON document on stdout; diagnostics stay on stderr.
 
-set -eo pipefail
+set -u
 
 CONNECTA_CLI="${CONNECTA_CLI:-conecta-cli}"
-ACTION="${1:-status}"
 
-case "$ACTION" in
-  connect)
-    "$CONNECTA_CLI" vpn connect 2>/dev/null
-    echo '{"action":"connect","success":true}'
-    ;;
-  disconnect)
-    "$CONNECTA_CLI" vpn disconnect 2>/dev/null
-    echo '{"action":"disconnect","success":true}'
-    ;;
-  toggle)
-    RESULT=$("$CONNECTA_CLI" vpn toggle 2>/dev/null)
-    if echo "$RESULT" | grep -q "connected"; then
-      echo '{"action":"toggle","connected":true}'
-    else
-      echo '{"action":"toggle","connected":false}'
-    fi
-    ;;
-  status)
-    if ip link show wg0 &>/dev/null; then
-      IP=$(ip -4 addr show wg0 2>/dev/null | grep "inet " | awk '{print $2}' || echo "")
-      cat <<EOF
-{
-  "connected": true,
-  "ip": "$IP"
+usage_json() {
+  printf '%s' '{"ok":false,"error":{"code":"invalid_input","message":"usage: omarchy-conecta-vpn {connect|disconnect|toggle|status}"}}'
 }
-EOF
-    else
-      echo '{"connected":false,"ip":""}'
-    fi
-    ;;
+
+ACTION="${1:-}"
+case "$ACTION" in
+  connect|disconnect|toggle|status) ;;
   *)
     echo "Usage: $0 {connect|disconnect|toggle|status}" >&2
-    exit 1
+    usage_json
+    exit 2
     ;;
 esac
+
+out=$("$CONNECTA_CLI" vpn "$ACTION" 2>/dev/null); rc=$?
+printf '%s' "$out"
+exit "$rc"

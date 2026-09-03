@@ -25,7 +25,7 @@ func NewManager(iface, name string) *Manager {
 
 // Status returns the current VPN status
 func (m *Manager) Status() (*Status, error) {
-	s := &Status{}
+	s := &Status{Interface: m.iface}
 
 	// Check interface
 	out, err := exec.Command("ip", "-4", "addr", "show", m.iface).Output()

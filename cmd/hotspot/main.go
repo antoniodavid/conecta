@@ -7,6 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 
+	"conecta/pkg/config"
 	"conecta/pkg/hotspot"
 )
 
@@ -33,17 +34,32 @@ func pollLoop(p *tea.Program) {
 // ─── Model ───────────────────────────────────────────────────────────────────
 
 type Model struct {
-	hotspot    *hotspot.CreateAP
-	status     *hotspot.Status
-	clients    []hotspot.Client
-	updatedAt  time.Time
-	statusMsg  string
-	statusExp  time.Time
+	cfg       *config.Config
+	hotspot   *hotspot.CreateAP
+	status    *hotspot.Status
+	clients   []hotspot.Client
+	updatedAt time.Time
+	statusMsg string
+	statusExp time.Time
 }
 
 func NewModel() Model {
+	// Load user config; fall back to package defaults when absent.
+	cfg, err := config.Load(config.GetConfigPath())
+	if err != nil {
+		cfg = config.DefaultConfig()
+	}
 	return Model{
-		hotspot: hotspot.NewCreateAP(nil),
+		cfg: cfg,
+		hotspot: hotspot.NewCreateAP(&hotspot.Config{
+			SSID:       cfg.Hotspot.SSID,
+			Passphrase: cfg.Hotspot.Passphrase,
+			Channel:    cfg.Hotspot.Channel,
+			FreqBand:   cfg.Hotspot.FreqBand,
+			Method:     cfg.Hotspot.Method,
+			Subnet:     cfg.Hotspot.Subnet,
+			Gateway:    cfg.Hotspot.Gateway,
+		}),
 	}
 }
 
@@ -117,7 +133,12 @@ func (m Model) stopHotspot() tea.Cmd {
 
 func (m Model) setupNAT() tea.Cmd {
 	return func() tea.Msg {
-		n := hotspot.NewNAT("192.168.12.0/24", "ap0", "wg0", "enp3s0")
+		n := hotspot.NewNAT(
+			m.cfg.Hotspot.Subnet,
+			"ap0",
+			m.cfg.VPN.Interface,
+			m.cfg.Network.Interface,
+		)
 		err := n.Setup()
 		if err != nil {
 			return actionResultMsg{false, "NAT error: " + err.Error()}
@@ -148,7 +169,7 @@ func (m Model) View() string {
 	}
 
 	// Clients
-	s += "\n═══ CLIENTS (%d) ═══\n"
+	s += fmt.Sprintf("\n═══ CLIENTS (%d) ═══\n", len(m.clients))
 	if len(m.clients) == 0 {
 		s += "  (none)\n"
 	} else {

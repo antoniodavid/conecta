@@ -16,7 +16,7 @@ type Config struct {
 func DefaultConfig() *Config {
 	return &Config{
 		SSID:       "RUBAN_WIFI",
-		Passphrase: "Bunker.871217",
+		Passphrase: "CHANGE-ME-USE-16-PLUS-CHARS",
 		Channel:    "default",
 		FreqBand:   "2.4",
 		Method:     "nat",

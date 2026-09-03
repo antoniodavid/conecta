@@ -23,6 +23,10 @@ func NewCreateAP(config *Config) *CreateAP {
 
 // Start starts the hotspot
 func (c *CreateAP) Start() error {
+	// Privilege pre-check before any destructive step (fail closed, exit 4 upstream).
+	if err := checkAuthz(); err != nil {
+		return err
+	}
 	// Kill any stale processes
 	exec.Command("killall", "hostapd").Run()
 	exec.Command("killall", "dnsmasq").Run()
@@ -47,6 +51,9 @@ func (c *CreateAP) Start() error {
 
 // Stop stops the hotspot
 func (c *CreateAP) Stop() error {
+	if err := checkAuthz(); err != nil {
+		return err
+	}
 	cmd := exec.Command("sudo", "systemctl", "stop", "create_ap")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to stop create_ap: %w", err)
@@ -178,21 +185,47 @@ func (c *CreateAP) countClients() int {
 	return strings.Count(string(out), "Station ")
 }
 
+// ParseIWInterfaces parses `iw dev` output for same-line "Interface <name>" entries.
+// It preserves hostile names verbatim (no shell eval happens here).
+func ParseIWInterfaces(output string) ([]string, error) {
+	var ifaces []string
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) >= 2 && fields[0] == "Interface" {
+			name := strings.Join(fields[1:], " ")
+			// Guard against "Interface" with no name on the same line.
+			if name != "" {
+				ifaces = append(ifaces, name)
+			}
+		}
+	}
+	if len(ifaces) == 0 {
+		return nil, fmt.Errorf("no WiFi interface found")
+	}
+	return ifaces, nil
+}
+
+// checkAuthz verifies non-interactive privilege before destructive steps.
+// It fails closed: denied or unavailable authz returns an authz error.
+func checkAuthz() error {
+	if err := exec.Command("sudo", "-n", "true").Run(); err != nil {
+		return fmt.Errorf("authz: privileged action denied or unavailable (sudo -n true failed): %w", err)
+	}
+	return nil
+}
+
 // detectWiFiInterface detects the WiFi interface
 func detectWiFiInterface() (string, error) {
 	out, err := exec.Command("iw", "dev").Output()
 	if err != nil {
-		return "", fmt.Errorf("failed to run iw: %w", err)
+		return "", fmt.Errorf("tool unavailable: iw: %w", err)
 	}
 
-	lines := strings.Split(string(out), "\n")
-	for i, line := range lines {
-		if strings.TrimSpace(line) == "Interface" && i+1 < len(lines) {
-			return strings.TrimSpace(lines[i+1]), nil
-		}
+	ifaces, err := ParseIWInterfaces(string(out))
+	if err != nil {
+		return "", err
 	}
-
-	return "", fmt.Errorf("no WiFi interface found")
+	return ifaces[0], nil
 }
 
 // isRunning checks if a process is running

@@ -14,9 +14,11 @@ WiFi hotspot sharing and VPN control for Cuba's ETECSA network.
 ### Prerequisites
 
 - Omarchy desktop environment
-- `conecta-cli` installed (see main project README)
+- `conecta-cli` installed and on `PATH` (see main project README;
+  user-owned `~/.local/bin` or root-owned `/usr/local/bin`, never setuid)
+- `jq` (adapters build and validate JSON with it)
 - `create_ap` for hotspot functionality
-- WireGuard for VPN (optional)
+- `iw` for WiFi detection, `iptables` for NAT, WireGuard for VPN (optional)
 
 ### Install Plugin
 
@@ -45,7 +47,17 @@ Right-click the bar widget to configure:
 - **Show hotspot** - Show/hide hotspot controls
 - **Show VPN** - Show/hide VPN controls
 - **Show speed test** - Show/hide speed test button
-- **Auto-reconnect** - Automatically reconnect on disconnect
+
+## Authorization policy
+
+A bar widget cannot answer a password prompt, so privileged actions are
+gated: hotspot start/stop, NAT setup, and VPN connect/disconnect require a
+pre-authorized non-interactive setup (e.g. a root-installed sudoers
+NOPASSWD entry for the documented commands). Until that authorization is
+resolved, those actions fail closed — the CLI exits `4` with parseable
+failure JSON and the host is left untouched. Keep bar-triggered
+hotspot/NAT/VPN disabled until the setup is authorized. Read-only status
+and portal login need no privileges.
 
 ## Usage
 
@@ -119,7 +131,9 @@ omarchy-plugin/
 
 1. Check WiFi interface: `iw dev`
 2. Check create_ap: `systemctl status create_ap`
-3. Check permissions: some commands need sudo
+3. Check authorization: privileged actions need pre-authorized non-interactive
+   sudo (`sudo -n true` must succeed); without it they exit `4` by design —
+   see "Authorization policy" above
 
 ## Development
 

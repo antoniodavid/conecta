@@ -1,7 +1,6 @@
 package network
 
 import (
-	"crypto/tls"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,9 +27,8 @@ func NewPortal(config *NetworkConfig) *Portal {
 	client := &http.Client{
 		Timeout: config.Timeout,
 		Jar:     jar,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
+		// TLS certificates are verified by default. No InsecureSkipVerify:
+		// captive-portal exceptions must be explicit, scoped, and authorized.
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
 				return http.ErrUseLastResponse
@@ -54,6 +52,13 @@ func (p *Portal) CheckPortal() (*Connection, error) {
 		LastCheck: time.Now(),
 	}
 
+	// First, check if we have real internet connectivity
+	if p.hasInternetConnectivity() {
+		conn.Status = PortalConnected
+		return conn, nil
+	}
+
+	// No internet - check portal status
 	resp, err := p.client.Get(p.config.PortalURL + "/")
 	if err != nil {
 		conn.Status = PortalError
@@ -76,14 +81,56 @@ func (p *Portal) CheckPortal() (*Connection, error) {
 	return conn, nil
 }
 
+// hasInternetConnectivity checks if we have real internet access
+func (p *Portal) hasInternetConnectivity() bool {
+	// Try to reach Google's connectivity check (returns 204 when connected)
+	client := &http.Client{
+		Timeout: 3 * time.Second,
+		CheckRedirect: func(r *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	// Check 1: Google connectivity check
+	resp, err := client.Get("http://connectivitycheck.gstatic.com/generate_204")
+	if err == nil {
+		resp.Body.Close()
+		if resp.StatusCode == 204 {
+			return true
+		}
+	}
+
+	// Check 2: Try reaching a known HTTP endpoint
+	resp2, err := client.Get("http://httpbin.org/ip")
+	if err == nil {
+		resp2.Body.Close()
+		if resp2.StatusCode == 200 {
+			return true
+		}
+	}
+
+	return false
+}
+
 // Login authenticates with the captive portal
 func (p *Portal) Login(user, pass string) (*Connection, error) {
+	if p == nil || p.config == nil || p.client == nil {
+		return &Connection{Status: PortalError, LastCheck: time.Now()},
+			fmt.Errorf("portal client not initialized")
+	}
 	conn := &Connection{
-		Username:  user,
 		Gateway:   p.config.Gateway,
 		Interface: p.config.Interface,
 		PortalURL: p.config.PortalURL,
 		LastCheck: time.Now(),
+	}
+	// Never retain credentials on the connection: they must not leak into
+	// logs, JSON responses, or examples. Username is intentionally omitted.
+
+	if p == nil || p.config == nil || p.client == nil {
+		conn.Status = PortalError
+		conn.LastError = fmt.Errorf("portal client not initialized")
+		return conn, conn.LastError
 	}
 
 	// Get login page for hidden fields
@@ -116,8 +163,13 @@ func (p *Portal) Login(user, pass string) (*Connection, error) {
 		"Enviar":      {"Aceptar"},
 	}
 
-	// Submit login
-	req, _ := http.NewRequest("POST", p.config.PortalURL+"//LoginServlet", strings.NewReader(form.Encode()))
+	// Submit login (nil-request guard: malformed PortalURL fails closed, no credentials sent).
+	req, err := http.NewRequest("POST", p.config.PortalURL+"//LoginServlet", strings.NewReader(form.Encode()))
+	if err != nil || req == nil {
+		conn.Status = PortalError
+		conn.LastError = fmt.Errorf("invalid portal request")
+		return conn, conn.LastError
+	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux) AppleWebKit/537.36")
 	req.Header.Set("Origin", p.config.PortalURL)
@@ -147,7 +199,10 @@ func (p *Portal) Logout() error {
 	resp.Body.Close()
 
 	// POST logout
-	req, _ := http.NewRequest("POST", p.config.PortalURL+"//LogoutServlet", nil)
+	req, err := http.NewRequest("POST", p.config.PortalURL+"//LogoutServlet", nil)
+	if err != nil || req == nil {
+		return fmt.Errorf("invalid portal request")
+	}
 	req.Header.Set("User-Agent", "Mozilla/5.0 (X11; Linux) AppleWebKit/537.36")
 	req.Header.Set("Origin", p.config.PortalURL)
 	req.Header.Set("Referer", p.config.PortalURL+"/")
@@ -169,54 +224,45 @@ func (p *Portal) Logout() error {
 	return fmt.Errorf("logout failed: HTTP %d", resp2.StatusCode)
 }
 
-// parseLoginResponse parses the login response and returns connection status
-func (p *Portal) parseLoginResponse(code int, html string, conn *Connection) (*Connection, error) {
+// ClassifyLoginResponse is the pure login classifier: known success markers map
+// to connected, known failure markers map to errors, and anything unknown
+// fails closed (never false connected).
+func ClassifyLoginResponse(code int, html string) (PortalStatus, error) {
 	lower := strings.ToLower(html)
 
 	if strings.Contains(html, "ya está conectado") || strings.Contains(html, "ya conectado") {
-		conn.Status = PortalConnected
-		return conn, nil
+		return PortalConnected, nil
 	}
-
 	if strings.Contains(lower, "logout") || strings.Contains(lower, "desconectar") ||
 		strings.Contains(lower, "tiempo restante") || strings.Contains(lower, "bytes") {
-		conn.Status = PortalConnected
-		return conn, nil
+		return PortalConnected, nil
 	}
-
 	if code == 302 || code == 301 {
-		conn.Status = PortalConnected
-		return conn, nil
+		return PortalConnected, nil
 	}
-
 	if strings.Contains(html, "alert(") {
 		if m := regexp.MustCompile(`alert\("([^"]+)"\)`).FindStringSubmatch(html); len(m) > 1 {
-			conn.Status = PortalError
-			conn.LastError = fmt.Errorf("%s", m[1])
-			return conn, conn.LastError
+			return PortalError, fmt.Errorf("%s", m[1])
 		}
 	}
-
 	if strings.Contains(lower, "usuario no existe") {
-		conn.Status = PortalError
-		conn.LastError = fmt.Errorf("usuario no existe")
-		return conn, conn.LastError
+		return PortalError, fmt.Errorf("usuario no existe")
 	}
-
 	if strings.Contains(lower, "contraseña incorrecta") || strings.Contains(lower, "invalid password") {
-		conn.Status = PortalError
-		conn.LastError = fmt.Errorf("contraseña incorrecta")
-		return conn, conn.LastError
+		return PortalError, fmt.Errorf("contraseña incorrecta")
 	}
-
 	if strings.Contains(html, "LoginServlet") {
-		conn.Status = PortalError
-		conn.LastError = fmt.Errorf("credenciales inválidas")
-		return conn, conn.LastError
+		return PortalError, fmt.Errorf("credenciales inválidas")
 	}
+	return PortalError, fmt.Errorf("unrecognized portal response")
+}
 
-	conn.Status = PortalConnected
-	return conn, nil
+// parseLoginResponse parses the login response and returns connection status
+func (p *Portal) parseLoginResponse(code int, html string, conn *Connection) (*Connection, error) {
+	status, err := ClassifyLoginResponse(code, html)
+	conn.Status = status
+	conn.LastError = err
+	return conn, err
 }
 
 // extractInput extracts hidden form field values

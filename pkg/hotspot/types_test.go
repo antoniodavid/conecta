@@ -10,8 +10,8 @@ func TestDefaultConfig(t *testing.T) {
 	if cfg.SSID != "RUBAN_WIFI" {
 		t.Errorf("DefaultConfig().SSID = %q, want %q", cfg.SSID, "RUBAN_WIFI")
 	}
-	if cfg.Passphrase != "Bunker.871217" {
-		t.Errorf("DefaultConfig().Passphrase = %q, want %q", cfg.Passphrase, "Bunker.871217")
+	if cfg.Passphrase != "CHANGE-ME-USE-16-PLUS-CHARS" {
+		t.Errorf("DefaultConfig().Passphrase = %q, want %q", cfg.Passphrase, "CHANGE-ME-USE-16-PLUS-CHARS")
 	}
 	if cfg.Channel != "default" {
 		t.Errorf("DefaultConfig().Channel = %q, want %q", cfg.Channel, "default")

@@ -63,7 +63,7 @@ func DefaultConfig() *Config {
 		},
 		Hotspot: HotspotConfig{
 			SSID:       "RUBAN_WIFI",
-			Passphrase: "Bunker.871217",
+			Passphrase: "CHANGE-ME-USE-16-PLUS-CHARS",
 			Channel:    "default",
 			FreqBand:   "2.4",
 			Method:     "nat",
@@ -113,7 +113,8 @@ func Save(cfg *Config, path string) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	// Config may contain credentials: owner-only access.
+	return os.WriteFile(path, data, 0600)
 }
 
 // GetConfigPath returns the default config path

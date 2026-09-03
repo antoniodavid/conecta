@@ -36,6 +36,9 @@ func NewNAT(hotspotSubnet, hotspotIface, vpnIface, exitIface string) *NAT {
 
 // Setup configures NAT rules
 func (n *NAT) Setup() error {
+	if err := checkAuthz(); err != nil {
+		return err
+	}
 	// Enable IP forwarding
 	if err := exec.Command("sudo", "sysctl", "-w", "net.ipv4.ip_forward=1").Run(); err != nil {
 		return fmt.Errorf("failed to enable IP forwarding: %w", err)

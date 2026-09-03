@@ -3,43 +3,28 @@
 # omarchy:args=[start|stop|status|clients]
 # omarchy:hidden=true
 #
-# Manages the WiFi hotspot for sharing ETECSA connection.
-# Used by the Omarchy bar widget for quick hotspot control.
+# Thin adapter over conecta-cli: passes CLI stdout through verbatim and
+# propagates its exit status unchanged. Never synthesizes success.
+# Contract: one JSON document on stdout; diagnostics stay on stderr.
 
-set -eo pipefail
+set -u
 
 CONNECTA_CLI="${CONNECTA_CLI:-conecta-cli}"
-ACTION="${1:-status}"
 
-case "$ACTION" in
-  start)
-    "$CONNECTA_CLI" hotspot start 2>/dev/null
-    echo '{"action":"start","success":true}'
-    ;;
-  stop)
-    "$CONNECTA_CLI" hotspot stop 2>/dev/null
-    echo '{"action":"stop","success":true}'
-    ;;
-  status)
-    if systemctl is-active --quiet create_ap 2>/dev/null; then
-      SSID=$(grep "^SSID=" /etc/create_ap.conf 2>/dev/null | cut -d= -f2 || echo "")
-      CLIENTS=$(iw dev ap0 station dump 2>/dev/null | grep -c "Station " || echo "0")
-      cat <<EOF
-{
-  "active": true,
-  "ssid": "$SSID",
-  "clients": $CLIENTS
+usage_json() {
+  printf '%s' '{"ok":false,"error":{"code":"invalid_input","message":"usage: omarchy-conecta-hotspot {start|stop|status|clients}"}}'
 }
-EOF
-    else
-      echo '{"active":false,"ssid":"","clients":0}'
-    fi
-    ;;
-  clients)
-    "$CONNECTA_CLI" hotspot clients 2>/dev/null | awk 'NR>1{print}' || echo "No clients"
-    ;;
+
+ACTION="${1:-}"
+case "$ACTION" in
+  start|stop|status|clients) ;;
   *)
     echo "Usage: $0 {start|stop|status|clients}" >&2
-    exit 1
+    usage_json
+    exit 2
     ;;
 esac
+
+out=$("$CONNECTA_CLI" hotspot "$ACTION" 2>/dev/null); rc=$?
+printf '%s' "$out"
+exit "$rc"

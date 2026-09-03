@@ -3,73 +3,69 @@
 # omarchy:args=[--json]
 # omarchy:hidden=true
 #
-# Outputs the current ETECSA connection status, hotspot state, and VPN state
-# as a single JSON record. The Omarchy bar widget reads this to populate
-# the panel.
+# Thin adapter: aggregates conecta-cli JSON documents with jq into the single
+# record the panel reads. The CLI owns detection (Wi-Fi signal, VPN
+# interface); this script never re-parses `iw`/`ip` text and never evals
+# network input. Values stay JSON data via --argjson, so hostile SSIDs cannot
+# break the document. Exit status is the first nonzero CLI exit (0 when all
+# sections succeed); output is always one compact JSON line.
 
-set -eo pipefail
+set -u
 
 CONNECTA_CLI="${CONNECTA_CLI:-conecta-cli}"
-JSON_MODE=false
 
-if [[ "$1" == "--json" ]]; then
-  JSON_MODE=true
-fi
-
-# Get connection status
-STATUS_OUTPUT=$("$CONNECTA_CLI" status 2>/dev/null || echo "error")
-if echo "$STATUS_OUTPUT" | grep -q "needs auth"; then
-  CONN_STATUS="needs_auth"
-elif echo "$STATUS_OUTPUT" | grep -q "connected"; then
-  CONN_STATUS="connected"
-elif echo "$STATUS_OUTPUT" | grep -q "no portal"; then
-  CONN_STATUS="no_portal"
-else
-  CONN_STATUS="error"
-fi
-
-# Get gateway
-GATEWAY=$(echo "$STATUS_OUTPUT" | grep "Gateway:" | awk '{print $2}' || echo "")
-
-# Get interface
-INTERFACE=$(echo "$STATUS_OUTPUT" | grep "Interface:" | awk '{print $2}' || echo "")
-
-# Get hotspot status
-HOTSPOT_ACTIVE=false
-HOTSPOT_SSID=""
-HOTSPOT_CLIENTS=0
-if systemctl is-active --quiet create_ap 2>/dev/null; then
-  HOTSPOT_ACTIVE=true
-  HOTSPOT_SSID=$(grep "^SSID=" /etc/create_ap.conf 2>/dev/null | cut -d= -f2 || echo "")
-  HOTSPOT_CLIENTS=$(iw dev ap0 station dump 2>/dev/null | grep -c "Station " || echo "0")
-fi
-
-# Get VPN status
-VPN_CONNECTED=false
-VPN_IP=""
-VPN_IFACE="wg0"
-if ip link show "$VPN_IFACE" &>/dev/null; then
-  VPN_CONNECTED=true
-  VPN_IP=$(ip -4 addr show "$VPN_IFACE" 2>/dev/null | grep "inet " | awk '{print $2}' || echo "")
-fi
-
-# Output JSON
-cat <<EOF
-{
-  "connection": {
-    "status": "$CONN_STATUS",
-    "gateway": "$GATEWAY",
-    "interface": "$INTERFACE"
-  },
-  "hotspot": {
-    "active": $HOTSPOT_ACTIVE,
-    "ssid": "$HOTSPOT_SSID",
-    "clients": $HOTSPOT_CLIENTS
-  },
-  "vpn": {
-    "connected": $VPN_CONNECTED,
-    "ip": "$VPN_IP"
-  },
-  "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+cli_json() {
+  local out rc
+  out=$("$CONNECTA_CLI" "$@" 2>/dev/null); rc=$?
+  printf '%s' "$out"
+  return "$rc"
 }
-EOF
+
+# valid_or_false <text>: print text when it is a JSON document, else a
+# failure stub so merging never breaks on empty/non-JSON output.
+valid_or_false() {
+  if printf '%s' "$1" | jq -e . >/dev/null 2>&1; then
+    printf '%s' "$1"
+  else
+    printf '{"ok":false}'
+  fi
+}
+
+status_raw=$(cli_json status); status_rc=$?
+hotspot_raw=$(cli_json hotspot status); hotspot_rc=$?
+vpn_raw=$(cli_json vpn status); vpn_rc=$?
+
+status_json=$(valid_or_false "$status_raw")
+hotspot_json=$(valid_or_false "$hotspot_raw")
+vpn_json=$(valid_or_false "$vpn_raw")
+
+merged=$(jq -n -c \
+  --argjson st "$status_json" \
+  --argjson hs "$hotspot_json" \
+  --argjson vn "$vpn_json" \
+  '{
+    connection: {
+      status: ($st.data.status // "error"),
+      gateway: ($st.data.gateway // ""),
+      interface: ($st.data.interface // ""),
+      ssid: ($st.data.wifi.ssid // ""),
+      signal: ($st.data.wifi.signal // 0)
+    },
+    hotspot: {
+      active: ($hs.data.active // false),
+      ssid: ($hs.data.ssid // ""),
+      clients: ($hs.data.clients // 0)
+    },
+    vpn: {
+      connected: ($vn.data.connected // false),
+      ip: ($vn.data.ip // "")
+    },
+    timestamp: (now | todate)
+  }')
+printf '%s' "$merged"
+
+rc=0
+for c in "$status_rc" "$hotspot_rc" "$vpn_rc"; do
+  if [ "$c" -ne 0 ]; then rc="$c"; break; fi
+done
+exit "$rc"

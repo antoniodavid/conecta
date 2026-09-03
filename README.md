@@ -30,6 +30,22 @@ mkdir -p ~/.local/bin
 cp bin/* ~/.local/bin/
 ```
 
+## Instalación y privilegios
+
+- Los binarios pertenecen al usuario (`~/.local/bin`) o a root
+  (`/usr/local/bin`); nunca uses setuid.
+- Las acciones privilegiadas (hotspot, NAT, VPN) exigen autorización no
+  interactiva previamente configurada (`sudo -n`); sin ella fallan con
+  salida `4` sin tocar el host. Las acciones de la barra quedan
+  deshabilitadas hasta resolver esa autorización.
+- `~/.config/conecta/config.yaml` puede contener credenciales y se guarda
+  con `0600`.
+- Herramientas del sistema: `iw`, `create_ap`, `iptables`, WireGuard
+  (opcional), `jq` (plugin Omarchy).
+
+Ver [MANUAL.md](MANUAL.md) (instalación, privilegios) y
+[omarchy-plugin/README.md](omarchy-plugin/README.md) (plugin).
+
 ## Uso Rápido
 
 ```bash

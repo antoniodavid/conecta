@@ -1,44 +1,30 @@
 #!/bin/bash
 # omarchy:summary=Login to ETECSA portal
-# omarchy:args=[login|logout|speed]
+# omarchy:args=[login|logout|speed|status]
 # omarchy:hidden=true
 #
-# Manages ETECSA portal authentication.
-# Used by the Omarchy bar widget for quick login/logout.
+# Thin adapter over conecta-cli: passes CLI stdout through verbatim and
+# propagates its exit status unchanged. Never synthesizes success.
+# Contract: one JSON document on stdout; diagnostics stay on stderr.
 
-set -eo pipefail
+set -u
 
 CONNECTA_CLI="${CONNECTA_CLI:-conecta-cli}"
-ACTION="${1:-status}"
 
+usage_json() {
+  printf '%s' '{"ok":false,"error":{"code":"invalid_input","message":"usage: omarchy-conecta-login {login|logout|speed|status}"}}'
+}
+
+ACTION="${1:-}"
 case "$ACTION" in
-  login)
-    RESULT=$("$CONNECTA_CLI" login 2>/dev/null)
-    if echo "$RESULT" | grep -q "successful"; then
-      echo '{"action":"login","success":true}'
-    else
-      echo "{\"action\":\"login\",\"success\":false,\"error\":\"$RESULT\"}"
-    fi
-    ;;
-  logout)
-    "$CONNECTA_CLI" logout 2>/dev/null
-    echo '{"action":"logout","success":true}'
-    ;;
-  speed)
-    "$CONNECTA_CLI" speed 2>/dev/null
-    ;;
-  status)
-    STATUS=$("$CONNECTA_CLI" status 2>/dev/null || echo "error")
-    if echo "$STATUS" | grep -q "connected"; then
-      echo '{"authenticated":true}'
-    elif echo "$STATUS" | grep -q "needs auth"; then
-      echo '{"authenticated":false,"needsAuth":true}'
-    else
-      echo '{"authenticated":false,"error":"disconnected"}'
-    fi
-    ;;
+  login|logout|speed|status) ;;
   *)
     echo "Usage: $0 {login|logout|speed|status}" >&2
-    exit 1
+    usage_json
+    exit 2
     ;;
 esac
+
+out=$("$CONNECTA_CLI" "$ACTION" 2>/dev/null); rc=$?
+printf '%s' "$out"
+exit "$rc"
