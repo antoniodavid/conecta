@@ -7,7 +7,14 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BIN_DIR="${BIN_DIR:-$HOME/.local/bin}"
-PLUGIN_DIR="${PLUGIN_DIR:-$HOME/.local/share/omarchy/plugins/conecta}"
+if [ -z "${PLUGIN_DIR:-}" ]; then
+  if [ -d "$HOME/.config/omarchy/plugins/conecta.network" ]; then
+    # Active user install; the shell loads plugins from here.
+    PLUGIN_DIR="$HOME/.config/omarchy/plugins/conecta.network"
+  else
+    PLUGIN_DIR="$HOME/.local/share/omarchy/plugins/conecta"
+  fi
+fi
 CHECK=false
 NO_PLUGIN=false
 
