@@ -44,7 +44,11 @@ wait
 install -m755 "$BUILD_DIR/conecta" "$BUILD_DIR/hotspot" "$BUILD_DIR/conecta-cli" "$BIN_DIR/"
 
 if ! $NO_PLUGIN; then
-  if [ -d "$(dirname "$PLUGIN_DIR")" ] && [ -w "$(dirname "$PLUGIN_DIR")" ]; then
+  if [ -d "$PLUGIN_DIR" ] && [ -w "$PLUGIN_DIR" ]; then
+    # Reuse the existing install dir (parent may be root-owned).
+    rm -rf "${PLUGIN_DIR:?}/"*
+    cp -a "$ROOT/omarchy-plugin/." "$PLUGIN_DIR/"
+  elif [ -d "$(dirname "$PLUGIN_DIR")" ] && [ -w "$(dirname "$PLUGIN_DIR")" ]; then
     mkdir -p "$PLUGIN_DIR"
     cp -a "$ROOT/omarchy-plugin/." "$PLUGIN_DIR/"
   elif command -v sudo >/dev/null; then
