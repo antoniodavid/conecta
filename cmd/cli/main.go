@@ -144,6 +144,10 @@ func cmdStatus(cfg *config.Config) {
 	if vpnStatus == nil {
 		vpnStatus = &vpn.Status{Interface: cfg.VPN.Interface}
 	}
+	profiles := vpnStatus.Profiles
+	if profiles == nil {
+		profiles = make([]vpn.Profile, 0)
+	}
 	emitResult(map[string]any{
 		"status":    conn.Status.String(),
 		"gateway":   conn.Gateway,
@@ -157,7 +161,9 @@ func cmdStatus(cfg *config.Config) {
 		"vpn": map[string]any{
 			"connected": vpnStatus.Connected,
 			"ip":        vpnStatus.IP,
+			"name":      vpnStatus.ConnectionName,
 			"interface": vpnStatus.Interface,
+			"profiles":  profiles,
 		},
 	})
 }
@@ -348,8 +354,8 @@ func cmdNAT(cfg *config.Config, args []string) {
 			return
 		}
 		emitResult(map[string]any{
-			"ip_forward":   status.IPForward,
-			"nat_rules":    status.NATRules,
+			"ip_forward":    status.IPForward,
+			"nat_rules":     status.NATRules,
 			"forward_rules": status.ForwardRules,
 		})
 
@@ -361,7 +367,7 @@ func cmdNAT(cfg *config.Config, args []string) {
 
 func cmdVPN(cfg *config.Config, args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "vpn requires an action (status|connect|disconnect|toggle)\n")
+		fmt.Fprintf(os.Stderr, "vpn requires an action (status|connect|disconnect|toggle|list|import)\n")
 		emitError("invalid_input", fmt.Sprintf("vpn requires an action: %v", args))
 		return
 	}
@@ -377,19 +383,77 @@ func cmdVPN(cfg *config.Config, args []string) {
 			emitOpError("vpn status", err)
 			return
 		}
+		profiles := status.Profiles
+		if profiles == nil {
+			profiles = make([]vpn.Profile, 0)
+		}
 		emitResult(map[string]any{
 			"connected": status.Connected,
 			"ip":        status.IP,
 			"name":      status.ConnectionName,
 			"interface": status.Interface,
+			"profiles":  profiles,
 		})
 
+	case "list":
+		if len(args) > 1 {
+			emitError("invalid_input", fmt.Sprintf("unexpected vpn list args: %v", args[1:]))
+			return
+		}
+		profiles, err := m.ListProfiles()
+		if err != nil {
+			emitOpError("vpn list", err)
+			return
+		}
+		if profiles == nil {
+			profiles = make([]vpn.Profile, 0)
+		}
+		emitResult(map[string]any{"profiles": profiles, "count": len(profiles)})
+
 	case "connect":
-		if err := m.Connect(); err != nil {
+		if len(args) > 2 {
+			emitError("invalid_input", fmt.Sprintf("unexpected vpn connect args: %v", args[1:]))
+			return
+		}
+		target := cfg.VPN.Name
+		if len(args) == 2 {
+			target = args[1]
+			if target == "" {
+				emitError("invalid_input", "vpn connect requires a non-empty profile name")
+				return
+			}
+			if profiles, err := m.ListProfiles(); err == nil && len(profiles) > 0 {
+				found := false
+				available := make([]string, 0, len(profiles))
+				for _, p := range profiles {
+					available = append(available, p.Name)
+					if p.Name == target {
+						found = true
+					}
+				}
+				if !found {
+					emitError("invalid_input", fmt.Sprintf("unknown VPN profile %q (available: %s)", target, strings.Join(available, ", ")))
+					return
+				}
+			}
+		}
+		if err := m.ConnectTo(target); err != nil {
 			emitOpError("vpn connect", err)
 			return
 		}
-		emitResult(map[string]any{"action": "connect", "connected": true})
+		emitResult(map[string]any{"action": "connect", "connected": true, "name": target})
+
+	case "import":
+		if len(args) != 2 {
+			emitError("invalid_input", fmt.Sprintf("vpn import requires one file argument: %v", args))
+			return
+		}
+		name, err := m.Import(args[1])
+		if err != nil {
+			emitOpError("vpn import", err)
+			return
+		}
+		emitResult(map[string]any{"action": "import", "name": name, "file": args[1]})
 
 	case "disconnect":
 		if err := m.Disconnect(); err != nil {

@@ -210,9 +210,11 @@ conecta-cli vpn toggle
 | `conecta-cli nat cleanup` | Limpiar NAT |
 | `conecta-cli nat status` | Estado de NAT |
 | `conecta-cli vpn status` | Estado VPN |
-| `conecta-cli vpn connect` | Conectar VPN |
-| `conecta-cli vpn disconnect` | Desconectar VPN |
+| `conecta-cli vpn list` | Listar perfiles WireGuard |
+| `conecta-cli vpn connect [name]` | Conectar VPN |
+| `conecta-cli vpn disconnect` | Desconectar VPN (solo desactiva, el perfil persiste) |
 | `conecta-cli vpn toggle` | Alternar VPN |
+| `conecta-cli vpn import <file>` | Importar .conf WireGuard |
 | `conecta-cli help` | Mostrar ayuda |
 
 ### Ejemplos detallados
@@ -362,17 +364,25 @@ vpn:
 ### Uso de VPN
 
 ```bash
-# Ver estado
+# Ver estado (incluye profiles[] con name/active/device/ip/country/flag)
 conecta-cli vpn status
 
-# Conectar
-conecta-cli vpn connect
+# Listar perfiles WireGuard (vacío = ok con lista vacía)
+conecta-cli vpn list
 
-# Desconectar
+# Conectar (default: perfil configurado; con nombre: valida y lista disponibles si es desconocido)
+conecta-cli vpn connect
+conecta-cli vpn connect Spain
+
+# Desconectar (solo desactiva: el perfil persiste y `vpn list` lo muestra inactivo;
+# el fallback `wg-quick down` solo retira la interfaz runtime, nunca el .conf)
 conecta-cli vpn disconnect
 
 # Alternar (conectar si está desconectada, desconectar si está conectada)
 conecta-cli vpn toggle
+
+# Importar un .conf WireGuard a NetworkManager (valida [Interface]; exit 3 si falla)
+conecta-cli vpn import ~/.config/conecta/import/USA.conf
 ```
 
 ### Compartir conexión VPN por hotspot

@@ -58,7 +58,9 @@ merged=$(jq -n -c \
     },
     vpn: {
       connected: ($vn.data.connected // false),
-      ip: ($vn.data.ip // "")
+      ip: ($vn.data.ip // ""),
+      name: ($vn.data.name // ""),
+      profiles: ($vn.data.profiles // [])
     },
     timestamp: (now | todate)
   }')

@@ -240,6 +240,32 @@ Panel {
     return ip === "—" ? "Tunnel is up." : "Exit IP " + ip
   }
 
+  function vpnProfiles() {
+    if (root.status === null || root.status === undefined) return []
+    var v = root.status.vpn
+    if (v === undefined || v === null) return []
+    var p = v.profiles
+    if (p === undefined || p === null) return []
+    return p
+  }
+
+  function vpnRowFlag(row) {
+    if (row === undefined || row === null) return ""
+    if (row.flag === undefined || row.flag === null) return ""
+    return row.flag
+  }
+
+  function vpnRowName(row) {
+    if (row === undefined || row === null) return ""
+    if (row.name === undefined || row.name === null) return ""
+    return row.name
+  }
+
+  function vpnRowActive(row) {
+    if (row === undefined || row === null) return false
+    return row.active === true
+  }
+
   function updatedText() {
     if (root.status === null || root.status === undefined) return ""
     var t = root.status.timestamp
@@ -345,6 +371,12 @@ Panel {
   function runVPN(action) {
     root.actionBuffer = "";
     vpnProcess.command = ["bash", root.vpnScript, action];
+    vpnProcess.running = true;
+  }
+
+  function runVPNConnect(name) {
+    root.actionBuffer = "";
+    vpnProcess.command = ["bash", root.vpnScript, "connect", name];
     vpnProcess.running = true;
   }
 
@@ -885,6 +917,74 @@ Panel {
               wrapMode: Text.Wrap
             }
 
+            Text {
+              width: parent.width
+              visible: root.vpnProfiles().length > 0
+              text: "Profiles"
+              font.family: root.fontFamily
+              font.pixelSize: 10
+              color: root.stationFaint
+            }
+
+            Column {
+              width: parent.width
+              spacing: 4
+              visible: root.vpnProfiles().length > 0
+
+              Repeater {
+                model: root.vpnProfiles()
+                delegate: Rectangle {
+                  width: parent.width
+                  height: 30
+                  radius: 6
+                  color: root.vpnRowActive(modelData) ? root.mintWash : root.stationEdge
+                  border.color: root.vpnRowActive(modelData) ? root.mint : root.stationEdge
+                  border.width: root.vpnRowActive(modelData) ? 1 : 0
+
+                  Row {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    spacing: 8
+
+                    Text {
+                      text: root.vpnRowFlag(modelData)
+                      font.family: root.fontFamily
+                      font.pixelSize: 13
+                      color: root.foreground
+                      anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Text {
+                      width: parent.width - 60
+                      text: root.vpnRowName(modelData)
+                      font.family: root.fontFamily
+                      font.pixelSize: 12
+                      font.bold: root.vpnRowActive(modelData)
+                      color: root.foreground
+                      elide: Text.ElideRight
+                      anchors.verticalCenter: parent.verticalCenter
+                    }
+
+                    Rectangle {
+                      width: 8
+                      height: 8
+                      radius: 4
+                      anchors.verticalCenter: parent.verticalCenter
+                      color: root.vpnRowActive(modelData) ? root.mint : root.stationFaint
+                    }
+                  }
+
+                  MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    enabled: !vpnProcess.running && !root.vpnRowActive(modelData)
+                    onClicked: root.runVPNConnect(root.vpnRowName(modelData))
+                  }
+                }
+              }
+            }
+
             Rectangle {
               width: parent.width
               height: root.btnHeight
@@ -917,6 +1017,41 @@ Panel {
                 cursorShape: Qt.PointingHandCursor
                 enabled: !vpnProcess.running
                 onClicked: root.runVPN("toggle")
+              }
+            }
+
+            Rectangle {
+              width: parent.width
+              height: root.btnHeight
+              radius: 6
+              color: root.stationEdge
+              opacity: vpnProcess.running ? 0.55 : 1
+
+              Row {
+                anchors.centerIn: parent
+                spacing: 8
+
+                Text {
+                  text: "󰋺"
+                  font.family: root.fontFamily
+                  font.pixelSize: 14
+                  color: root.mint
+                }
+
+                Text {
+                  text: vpnProcess.running ? "Updating VPN…" : "Import configs"
+                  font.family: root.fontFamily
+                  font.pixelSize: 12
+                  font.bold: true
+                  color: root.mint
+                }
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                enabled: !vpnProcess.running
+                onClicked: root.runVPN("import")
               }
             }
           }

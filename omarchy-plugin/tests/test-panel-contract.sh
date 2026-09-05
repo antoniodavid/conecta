@@ -83,6 +83,33 @@ else
   fail "status adapter must emit one JSON line: [$out]"
 fi
 
+# 8. VPN profiles + import surface: status forwards profiles, vpn adapter
+# supports list/import, Panel lists profiles with fixed-argv connect + import.
+grep -q 'profiles' "$ROOT/bin/omarchy-conecta-status" \
+  && pass "status adapter forwards vpn profiles" \
+  || fail "status adapter must forward vpn profiles"
+grep -q 'list|import' "$ROOT/bin/omarchy-conecta-vpn" \
+  && pass "vpn adapter supports list/import" \
+  || fail "vpn adapter must support list/import actions"
+for marker in 'vpnProfiles' 'runVPNConnect' 'Import configs'; do
+  grep -q "$marker" "$ROOT/Panel.qml" \
+    && pass "Panel contains $marker" \
+    || fail "Panel must contain $marker (profile list + import)"
+done
+grep -q '"connect", name' "$ROOT/Panel.qml" \
+  && pass "Panel connects by fixed argv name" \
+  || fail "Panel must connect via fixed argv [\"bash\", root.vpnScript, \"connect\", name]"
+if grep -F -q '?.' "$ROOT/Panel.qml"; then
+  fail "Panel must not use ?. operator"
+else
+  pass "Panel has no ?. operator"
+fi
+if grep -F -q '??' "$ROOT/Panel.qml"; then
+  fail "Panel must not use ?? operator"
+else
+  pass "Panel has no ?? operator"
+fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "PANEL CONTRACT: FAILING"
   exit 1

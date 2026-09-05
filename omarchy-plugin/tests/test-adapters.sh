@@ -115,6 +115,93 @@ export STUB_MODE=opfail
 out=$(bash "$BIN/omarchy-conecta-status" 2>/dev/null); rc=$?
 echo "$out" | jq -e . >/dev/null 2>&1 || { echo "FAIL: status on CLI failure not valid JSON: [$out]"; FAIL=1; }
 
+# 7. VPN list: stub profiles JSON must pass through verbatim with exit 0.
+cat > "$TMP/stub-vpn-list" <<'EOF'
+#!/bin/bash
+if [ "${1:-}" = "vpn" ] && [ "${2:-}" = "list" ]; then
+  echo '{"ok":true,"data":{"profiles":[{"name":"USA","active":true,"device":"USA","ip":"10.14.0.2/16","country":"US","flag":"FLAG"}],"count":1}}'
+  exit 0
+fi
+echo '{"ok":false,"error":{"code":"op_failed","message":"unexpected args"}}'
+exit 3
+EOF
+chmod +x "$TMP/stub-vpn-list"
+out=$(CONNECTA_CLI="$TMP/stub-vpn-list" bash "$BIN/omarchy-conecta-vpn" list 2>/dev/null); rc=$?
+echo "$out" | jq -e . >/dev/null 2>&1 || { echo "FAIL: vpn list not valid JSON: [$out]"; FAIL=1; }
+echo "$out" | jq -e '.data.profiles[0].name == "USA"' >/dev/null 2>&1 || { echo "FAIL: vpn list profiles not passed verbatim: [$out]"; FAIL=1; }
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL: vpn list exit=$rc want 0"
+  FAIL=1
+else
+  echo "PASS: vpn list passthrough exit 0"
+fi
+
+# 8. VPN import with missing dir: adapter creates it, none found = ok:true imported:[].
+export CONECTA_IMPORT_DIR="$TMP/missing-import-dir"
+rm -rf "$CONECTA_IMPORT_DIR"
+out=$(CONNECTA_CLI="$TMP/stub-vpn-list" CONECTA_IMPORT_DIR="$CONECTA_IMPORT_DIR" bash "$BIN/omarchy-conecta-vpn" import 2>/dev/null); rc=$?
+echo "$out" | jq -e '.ok == true and (.data.imported | length == 0)' >/dev/null 2>&1 || { echo "FAIL: vpn import missing dir must be ok:true imported:[]: [$out]"; FAIL=1; }
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL: vpn import missing dir exit=$rc want 0"
+  FAIL=1
+else
+  echo "PASS: vpn import missing dir exit 0"
+fi
+[ -d "$CONECTA_IMPORT_DIR" ] || { echo "FAIL: vpn import must create missing import dir"; FAIL=1; }
+
+# 9. VPN import with existing dir but no confs: same empty success.
+mkdir -p "$TMP/empty-import"
+out=$(CONNECTA_CLI="$TMP/stub-vpn-list" CONECTA_IMPORT_DIR="$TMP/empty-import" bash "$BIN/omarchy-conecta-vpn" import 2>/dev/null); rc=$?
+echo "$out" | jq -e '.ok == true and (.data.imported | length == 0)' >/dev/null 2>&1 || { echo "FAIL: vpn import no confs must be ok:true imported:[]: [$out]"; FAIL=1; }
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL: vpn import no confs exit=$rc want 0"
+  FAIL=1
+else
+  echo "PASS: vpn import no confs exit 0"
+fi
+
+# 10. VPN import mixed success/failure aggregation propagates the CLI failure.
+mkdir -p "$TMP/mixed-import"
+touch "$TMP/mixed-import/a.conf" "$TMP/mixed-import/b.conf"
+cat > "$TMP/stub-vpn-mixed" <<'EOF'
+#!/bin/bash
+case "${3:-}" in
+  *a.conf) echo '{"ok":true,"data":{"action":"import","name":"A","file":"a"}}'; exit 0 ;;
+  *b.conf) echo '{"ok":false,"error":{"code":"op_failed","message":"boom b"}}'; exit 3 ;;
+  *) echo '{"ok":false,"error":{"code":"op_failed","message":"unexpected"}}'; exit 3 ;;
+esac
+EOF
+chmod +x "$TMP/stub-vpn-mixed"
+out=$(CONNECTA_CLI="$TMP/stub-vpn-mixed" CONECTA_IMPORT_DIR="$TMP/mixed-import" bash "$BIN/omarchy-conecta-vpn" import 2>/dev/null); rc=$?
+echo "$out" | jq -e . >/dev/null 2>&1 || { echo "FAIL: vpn import mixed not valid JSON: [$out]"; FAIL=1; }
+echo "$out" | jq -e '.ok == false and (.data.imported | length == 1) and (.data.errors | length == 1)' >/dev/null 2>&1 || { echo "FAIL: vpn import mixed must aggregate 1 imported + 1 error: [$out]"; FAIL=1; }
+if [ "$rc" -ne 3 ]; then
+  echo "FAIL: vpn import mixed exit=$rc want 3 (propagate CLI failure, never synthesize success)"
+  FAIL=1
+else
+  echo "PASS: vpn import mixed exit 3"
+fi
+
+# 11. VPN import with a file arg passes through the CLI verbatim.
+cat > "$TMP/stub-vpn-single" <<'EOF'
+#!/bin/bash
+if [ "${1:-}" = "vpn" ] && [ "${2:-}" = "import" ]; then
+  echo '{"ok":true,"data":{"action":"import","name":"Solo","file":"x"}}'
+  exit 0
+fi
+echo '{"ok":false,"error":{"code":"op_failed","message":"unexpected"}}'
+exit 3
+EOF
+chmod +x "$TMP/stub-vpn-single"
+out=$(CONNECTA_CLI="$TMP/stub-vpn-single" bash "$BIN/omarchy-conecta-vpn" import /tmp/solo.conf 2>/dev/null); rc=$?
+echo "$out" | jq -e '.data.name == "Solo"' >/dev/null 2>&1 || { echo "FAIL: vpn import single file not passed verbatim: [$out]"; FAIL=1; }
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL: vpn import single exit=$rc want 0"
+  FAIL=1
+else
+  echo "PASS: vpn import single exit 0"
+fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "ADAPTER CONTRACT: RED (failing as expected before fix)"
   exit 1

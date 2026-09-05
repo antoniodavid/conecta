@@ -7,7 +7,7 @@ Herramienta unificada para gestionar conexión a internet ETECSA, hotspot WiFi y
 - ✅ **Portal ETECSA**: Login, logout, auto-reconexión
 - ✅ **Hotspot WiFi**: Compartir conexión vía create_ap
 - ✅ **NAT/Enrutamiento**: Configurar forwarding para clientes
-- ✅ **VPN**: Gestión de WireGuard
+- ✅ **VPN**: Gestión de WireGuard (disconnect only deactivates — profiles persist and `vpn list` still shows them inactive)
 - ✅ **Speed Test**: Medir velocidad de descarga
 - ✅ **TUI**: Interfaces de terminal interactivas
 - ✅ **CLI**: Comandos para scripts y automatización

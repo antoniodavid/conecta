@@ -1,30 +1,91 @@
 #!/bin/bash
 # omarchy:summary=Control Conecta VPN connection
-# omarchy:args=[connect|disconnect|toggle|status]
+# omarchy:args=[connect|disconnect|toggle|status|list|import]
 # omarchy:hidden=true
 #
 # Thin adapter over conecta-cli: passes CLI stdout through verbatim and
 # propagates its exit status unchanged. Never synthesizes success.
 # The VPN interface comes from the CLI (user config), never hardcoded here.
 # Contract: one JSON document on stdout; diagnostics stay on stderr.
+# import with a file arg imports that file via the CLI; with no arg it
+# imports every *.conf in ~/.config/conecta/import/ (created if missing).
 
 set -u
 
 CONNECTA_CLI="${CONNECTA_CLI:-conecta-cli}"
+CONECTA_IMPORT_DIR="${CONECTA_IMPORT_DIR:-$HOME/.config/conecta/import}"
 
 usage_json() {
-  printf '%s' '{"ok":false,"error":{"code":"invalid_input","message":"usage: omarchy-conecta-vpn {connect|disconnect|toggle|status}"}}'
+  printf '%s' '{"ok":false,"error":{"code":"invalid_input","message":"usage: omarchy-conecta-vpn {connect [name]|disconnect|toggle|status|list|import [file]}"}}'
 }
 
 ACTION="${1:-}"
 case "$ACTION" in
-  connect|disconnect|toggle|status) ;;
+  connect|disconnect|toggle|status|list|import) ;;
   *)
-    echo "Usage: $0 {connect|disconnect|toggle|status}" >&2
+    echo "Usage: $0 {connect [name]|disconnect|toggle|status|list|import [file]}" >&2
     usage_json
     exit 2
     ;;
 esac
+
+# import <file>: single-file verbatim passthrough.
+if [ "$ACTION" = "import" ] && [ $# -ge 2 ]; then
+  out=$("$CONNECTA_CLI" vpn import "$2" 2>/dev/null); rc=$?
+  printf '%s' "$out"
+  exit "$rc"
+fi
+
+# import with no arg: bulk import every *.conf in the import dir.
+if [ "$ACTION" = "import" ]; then
+  if ! mkdir -p "$CONECTA_IMPORT_DIR" 2>/dev/null; then
+    printf '%s' '{"ok":false,"error":{"code":"op_failed","message":"cannot create import directory"}}'
+    exit 3
+  fi
+  shopt -s nullglob
+  files=("$CONECTA_IMPORT_DIR"/*.conf)
+  shopt -u nullglob
+  if [ "${#files[@]}" -eq 0 ]; then
+    printf '%s' '{"ok":true,"data":{"imported":[]}}'
+    exit 0
+  fi
+  imported='[]'
+  errors='[]'
+  rc=0
+  failed=0
+  for f in "${files[@]}"; do
+    out=$("$CONNECTA_CLI" vpn import "$f" 2>/dev/null); cli_rc=$?
+    if [ "$cli_rc" -eq 0 ]; then
+      name=$(printf '%s' "$out" | jq -r '.data.name // empty' 2>/dev/null)
+      if [ -z "$name" ]; then
+        name=$(basename "$f" .conf)
+      fi
+      imported=$(jq -n -c --argjson arr "$imported" --arg file "$f" --arg name "$name" '$arr + [{file:$file,name:$name}]')
+    else
+      msg=$(printf '%s' "$out" | jq -r '.error.message // "import failed"' 2>/dev/null)
+      code=$(printf '%s' "$out" | jq -r '.error.code // "op_failed"' 2>/dev/null)
+      errors=$(jq -n -c --argjson arr "$errors" --arg file "$f" --arg msg "$msg" --arg code "$code" '$arr + [{file:$file,message:$msg,code:$code}]')
+      failed=$((failed+1))
+      if [ "$rc" -eq 0 ]; then
+        rc="$cli_rc"
+      fi
+    fi
+  done
+  if [ "$failed" -eq 0 ]; then
+    jq -n -c --argjson imp "$imported" '{"ok":true,"data":{"imported":$imp}}'
+    exit 0
+  fi
+  summary=$(jq -n -r --argjson arr "$errors" '[.[] | .file] | join(", ")')
+  jq -n -c --argjson imp "$imported" --argjson errs "$errors" --arg files "$summary" '{"ok":false,"error":{"code":"op_failed","message":("import failed for "+$files)},"data":{"imported":$imp,"errors":$errs}}'
+  exit "$rc"
+fi
+
+# connect [name]: forward the optional profile name as fixed argv.
+if [ "$ACTION" = "connect" ] && [ $# -ge 2 ]; then
+  out=$("$CONNECTA_CLI" vpn connect "$2" 2>/dev/null); rc=$?
+  printf '%s' "$out"
+  exit "$rc"
+fi
 
 out=$("$CONNECTA_CLI" vpn "$ACTION" 2>/dev/null); rc=$?
 printf '%s' "$out"
