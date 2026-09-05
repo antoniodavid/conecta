@@ -23,22 +23,86 @@ func NewManager(iface, name string) *Manager {
 	return &Manager{iface: iface, name: name}
 }
 
+// parseWireguardLinks parses `ip -o link show type wireguard` output and
+// returns the names of UP interfaces in order.
+func parseWireguardLinks(output string) []string {
+	var ifaces []string
+	for _, line := range strings.Split(output, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		// Format: "<idx>: <name>: <flags> ..." e.g.
+		// "633: USA: <POINTOPOINT,NOARP,UP,LOWER_UP> mtu 1420 ..."
+		parts := strings.SplitN(trimmed, ":", 3)
+		if len(parts) < 3 {
+			continue
+		}
+		name := strings.TrimSpace(parts[1])
+		if name == "" {
+			continue
+		}
+		flags := parts[2]
+		start := strings.Index(flags, "<")
+		end := strings.Index(flags, ">")
+		if start < 0 || end < 0 || end <= start {
+			continue
+		}
+		up := false
+		for _, f := range strings.Split(flags[start+1:end], ",") {
+			if strings.TrimSpace(f) == "UP" {
+				up = true
+				break
+			}
+		}
+		if !up {
+			continue
+		}
+		ifaces = append(ifaces, name)
+	}
+	return ifaces
+}
+
+// firstIPv4 returns the first "inet <addr>" value in `ip addr` output
+// (CIDR form, e.g. "10.14.0.2/16"), or "" when there is none.
+func firstIPv4(output string) string {
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		for i, f := range fields {
+			if f == "inet" && i+1 < len(fields) {
+				return fields[i+1]
+			}
+		}
+	}
+	return ""
+}
+
 // Status returns the current VPN status
 func (m *Manager) Status() (*Status, error) {
 	s := &Status{Interface: m.iface}
 
-	// Check interface
-	out, err := exec.Command("ip", "-4", "addr", "show", m.iface).Output()
-	if err == nil {
-		for _, line := range strings.Split(string(out), "\n") {
-			if strings.Contains(line, "inet ") {
-				parts := strings.Fields(line)
-				for i, p := range parts {
-					if p == "inet" && i+1 < len(parts) {
-						s.IP = parts[i+1]
-						s.Connected = true
-						break
-					}
+	// Check the configured interface first.
+	if out, err := exec.Command("ip", "-4", "addr", "show", m.iface).Output(); err == nil {
+		if ip := firstIPv4(string(out)); ip != "" {
+			s.IP = ip
+			s.Connected = true
+		}
+	}
+
+	// Fall back: adopt the first UP wireguard interface carrying IPv4, so a
+	// renamed iface (e.g. USA instead of wg0) still reports connected.
+	if !s.Connected {
+		if out, err := exec.Command("ip", "-o", "link", "show", "type", "wireguard").Output(); err == nil {
+			for _, name := range parseWireguardLinks(string(out)) {
+				addrOut, err := exec.Command("ip", "-4", "-o", "addr", "show", "dev", name).Output()
+				if err != nil {
+					continue
+				}
+				if ip := firstIPv4(string(addrOut)); ip != "" {
+					s.Interface = name
+					s.IP = ip
+					s.Connected = true
+					break
 				}
 			}
 		}

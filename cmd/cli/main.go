@@ -133,7 +133,13 @@ func cmdStatus(cfg *config.Config) {
 		return
 	}
 	// CLI owns detection: signed Wi-Fi signal and configured VPN interface.
-	snap := network.SnapshotLink(cfg.Network.Interface)
+	// Detect the real wireless iface (e.g. wlo1); fall back to the configured
+	// interface only when detection yields nothing.
+	wifiIface := cfg.Network.Interface
+	if detected, err := network.DetectWiFiInterface(); err == nil && detected != "" {
+		wifiIface = detected
+	}
+	snap := network.SnapshotLink(wifiIface)
 	vpnStatus, _ := vpn.NewManager(cfg.VPN.Interface, cfg.VPN.Name).Status()
 	if vpnStatus == nil {
 		vpnStatus = &vpn.Status{Interface: cfg.VPN.Interface}

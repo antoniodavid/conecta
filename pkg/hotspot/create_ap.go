@@ -6,6 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+
+	"conecta/pkg/network"
 )
 
 // CreateAP manages the create_ap service
@@ -186,19 +188,10 @@ func (c *CreateAP) countClients() int {
 }
 
 // ParseIWInterfaces parses `iw dev` output for same-line "Interface <name>" entries.
-// It preserves hostile names verbatim (no shell eval happens here).
+// It delegates to the network package so CLI status and hotspot share one
+// parser, including the P2P-device skip. Hostile names are kept verbatim.
 func ParseIWInterfaces(output string) ([]string, error) {
-	var ifaces []string
-	for _, line := range strings.Split(output, "\n") {
-		fields := strings.Fields(strings.TrimSpace(line))
-		if len(fields) >= 2 && fields[0] == "Interface" {
-			name := strings.Join(fields[1:], " ")
-			// Guard against "Interface" with no name on the same line.
-			if name != "" {
-				ifaces = append(ifaces, name)
-			}
-		}
-	}
+	ifaces := network.ParseWiFiInterfaces(output)
 	if len(ifaces) == 0 {
 		return nil, fmt.Errorf("no WiFi interface found")
 	}
@@ -214,18 +207,9 @@ func checkAuthz() error {
 	return nil
 }
 
-// detectWiFiInterface detects the WiFi interface
+// detectWiFiInterface detects the WiFi interface via the shared network helper.
 func detectWiFiInterface() (string, error) {
-	out, err := exec.Command("iw", "dev").Output()
-	if err != nil {
-		return "", fmt.Errorf("tool unavailable: iw: %w", err)
-	}
-
-	ifaces, err := ParseIWInterfaces(string(out))
-	if err != nil {
-		return "", err
-	}
-	return ifaces[0], nil
+	return network.DetectWiFiInterface()
 }
 
 // isRunning checks if a process is running

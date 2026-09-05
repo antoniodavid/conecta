@@ -79,6 +79,64 @@ func SnapshotLink(iface string) LinkSnapshot {
 	return snap
 }
 
+// ParseWiFiInterfaces parses `iw dev` output for same-line "Interface <name>"
+// entries, skipping P2P-device entries. The type line follows each interface
+// block, so a block whose type contains P2P-device is dropped; managed and
+// any other non-P2P type (or a missing type line) is accepted. Names are kept
+// verbatim; callers must escape, never eval.
+func ParseWiFiInterfaces(output string) []string {
+	var names []string
+	var isP2P []bool
+	current := -1
+	for _, line := range strings.Split(output, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "phy#") || strings.HasPrefix(trimmed, "Unnamed") {
+			// Close the current block: a later type line belongs to the
+			// unnamed/P2P-device pseudo-device, not the previous interface.
+			current = -1
+			continue
+		}
+		if strings.HasPrefix(trimmed, "Interface ") {
+			fields := strings.Fields(trimmed)
+			if len(fields) >= 2 {
+				if name := strings.Join(fields[1:], " "); name != "" {
+					names = append(names, name)
+					isP2P = append(isP2P, false)
+					current = len(names) - 1
+				}
+			}
+			continue
+		}
+		if current >= 0 && strings.HasPrefix(trimmed, "type ") {
+			typ := strings.TrimSpace(strings.TrimPrefix(trimmed, "type "))
+			if strings.Contains(strings.ToLower(typ), "p2p-device") {
+				isP2P[current] = true
+			}
+		}
+	}
+	var out []string
+	for i, name := range names {
+		if !isP2P[i] {
+			out = append(out, name)
+		}
+	}
+	return out
+}
+
+// DetectWiFiInterface runs fixed-argv `iw dev` and returns the first wireless
+// interface, skipping P2P-device entries.
+func DetectWiFiInterface() (string, error) {
+	out, err := exec.Command("iw", "dev").Output()
+	if err != nil {
+		return "", fmt.Errorf("tool unavailable: iw: %w", err)
+	}
+	ifaces := ParseWiFiInterfaces(string(out))
+	if len(ifaces) == 0 {
+		return "", fmt.Errorf("no WiFi interface found")
+	}
+	return ifaces[0], nil
+}
+
 // ParseIWLinkSSID extracts the SSID verbatim from `iw` link output.
 // It keeps hostile names intact; callers must JSON-escape, never eval.
 func ParseIWLinkSSID(output string) string {
