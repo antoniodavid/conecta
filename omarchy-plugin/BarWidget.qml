@@ -24,6 +24,9 @@ BarWidget {
   // Buffered process output: SplitParser delivers line chunks, so chunks
   // accumulate until one complete JSON document parses.
   property string statusBuffer: ""
+  // Settle follow-ups after an action: NetworkManager converges a few
+  // seconds after the first refresh, so requestRefresh schedules two more.
+  property int settleLeft: 0
 
   // Paths
   readonly property string pluginDir: Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "")
@@ -92,12 +95,21 @@ BarWidget {
     statusProcess.running = true;
   }
 
+  // Immediate refresh + two settle follow-ups (≈ covers NM convergence).
+  // Rapid successive actions just reset the counter; the single
+  // statusProcess keeps its current behavior when overlapping.
+  function refreshSoon() {
+    root.refreshStatus();
+    root.settleLeft = 2;
+  }
+
   // ─── Popup passthroughs. Shape contract for shell.summon/hide/toggle
   //      routing: Bar.findPanelWidget requires open/close/opened on the
   //      bar-widget root.
   readonly property bool opened: panelLoader.item ? panelLoader.item.opened === true : false
 
   function open() {
+    root.refreshStatus();
     if (panelLoader.item) panelLoader.item.open()
   }
 
@@ -106,6 +118,7 @@ BarWidget {
   }
 
   function togglePanel() {
+    root.refreshStatus();
     if (panelLoader.item) panelLoader.item.toggle()
   }
 
@@ -132,7 +145,7 @@ BarWidget {
     if ("status" in target) target.status = Qt.binding(function() { return root.status })
     if ("isOn" in target) target.isOn = Qt.binding(function() { return root.isOn })
     if (target.requestRefresh && root._panelHooked !== target) {
-      target.requestRefresh.connect(root.refreshStatus)
+      target.requestRefresh.connect(root.refreshSoon)
       root._panelHooked = target
     }
   }
@@ -148,6 +161,17 @@ BarWidget {
     running: true
     repeat: true
     onTriggered: root.refreshStatus()
+  }
+
+  Timer {
+    id: settleTimer
+    interval: 2500
+    repeat: true
+    running: root.settleLeft > 0
+    onTriggered: {
+      root.settleLeft = root.settleLeft - 1;
+      root.refreshStatus();
+    }
   }
 
   Loader {

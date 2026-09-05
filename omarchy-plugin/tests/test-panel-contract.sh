@@ -168,6 +168,17 @@ done
 grep -q 'requestRefresh' "$ROOT/BarWidget.qml" \
   && pass "BarWidget hooks panel requestRefresh" \
   || fail "BarWidget must connect panel requestRefresh to refreshStatus"
+grep -q 'function refreshSoon()' "$ROOT/BarWidget.qml" \
+  && pass "BarWidget owns refreshSoon" \
+  || fail "BarWidget must own refreshSoon (immediate + settle refresh)"
+grep -q 'requestRefresh.connect(root.refreshSoon)' "$ROOT/BarWidget.qml" \
+  && pass "BarWidget routes requestRefresh to refreshSoon" \
+  || fail "BarWidget must connect panel requestRefresh to refreshSoon"
+for marker in 'settleLeft' 'id: settleTimer'; do
+  grep -q "$marker" "$ROOT/BarWidget.qml" \
+    && pass "BarWidget contains $marker" \
+    || fail "BarWidget must contain $marker (settle follow-ups)"
+done
 grep -q 'requestRefresh' "$ROOT/Panel.qml" \
   && pass "Panel signals requestRefresh" \
   || fail "Panel must emit requestRefresh instead of polling itself"
