@@ -426,10 +426,10 @@ Panel {
 
           Text {
             anchors.centerIn: parent
-            text: "󰑓"
+            text: "↻"
             font.family: root.fontFamily
             font.pixelSize: 14
-            color: root.stationFaint
+            color: root.foreground
           }
 
           MouseArea {
