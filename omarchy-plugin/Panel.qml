@@ -406,12 +406,40 @@ Panel {
 
         // Header
         PanelHero {
+          id: heroHeader
           width: parent.width
           title: root.getStatusIcon() + " Conecta"
           meta: root.getStatusText()
           foreground: root.foreground
           fontFamily: root.fontFamily
         }
+        // Refresh, icon-only, aligned with the plugin name.
+        Rectangle {
+          width: 28
+          height: 28
+          radius: 14
+          anchors.right: parent.right
+          anchors.rightMargin: 2
+          anchors.verticalCenter: heroHeader.verticalCenter
+          color: root.stationEdge
+          opacity: statusProcess.running ? 0.55 : 1
+
+          Text {
+            anchors.centerIn: parent
+            text: "󰑓"
+            font.family: root.fontFamily
+            font.pixelSize: 14
+            color: root.stationFaint
+          }
+
+          MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            enabled: !statusProcess.running
+            onClicked: root.refreshStatus()
+          }
+        }
+
 
         // Signal-station hero: live meter next to the connection label.
         Rectangle {
@@ -494,33 +522,6 @@ Panel {
             }
           }
 
-          // Refresh, icon-only, top-right of the hero.
-          Rectangle {
-            width: 28
-            height: 28
-            radius: 14
-            anchors.top: parent.top
-            anchors.right: parent.right
-            anchors.topMargin: 8
-            anchors.rightMargin: 8
-            color: root.stationEdge
-            opacity: statusProcess.running ? 0.55 : 1
-
-            Text {
-              anchors.centerIn: parent
-              text: ""
-              font.family: root.fontFamily
-              font.pixelSize: 14
-              color: root.stationFaint
-            }
-
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              enabled: !statusProcess.running
-              onClicked: root.refreshStatus()
-            }
-          }
         }
 
         // Last action result (speed results live persistently in the
