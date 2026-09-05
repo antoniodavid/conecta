@@ -175,7 +175,7 @@ Panel {
 
   function heroSubline() {
     if (root.status === null || root.status === undefined)
-      return statusProcess.running ? "Reading status from adapters…" : "Press Refresh status to read the link."
+      return statusProcess.running ? "Reading status from adapters…" : "Press the refresh icon above to read the link."
     var parts = root.teleSsid()
     if (root.isOn) parts = parts + "  ·  " + root.sigValue() + "%"
     var gw = root.teleGateway()
@@ -493,6 +493,34 @@ Panel {
               }
             }
           }
+
+          // Refresh, icon-only, top-right of the hero.
+          Rectangle {
+            width: 28
+            height: 28
+            radius: 14
+            anchors.top: parent.top
+            anchors.right: parent.right
+            anchors.topMargin: 8
+            anchors.rightMargin: 8
+            color: root.stationEdge
+            opacity: statusProcess.running ? 0.55 : 1
+
+            Text {
+              anchors.centerIn: parent
+              text: ""
+              font.family: root.fontFamily
+              font.pixelSize: 14
+              color: root.stationFaint
+            }
+
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              enabled: !statusProcess.running
+              onClicked: root.refreshStatus()
+            }
+          }
         }
 
         // Last action result (speed results live persistently in the
@@ -599,7 +627,7 @@ Panel {
           Text {
             width: parent.width
             visible: root.status === null || root.status === undefined
-            text: "No readings yet — press Refresh status below."
+            text: "No readings yet — press the refresh icon above."
             font.family: root.fontFamily
             font.pixelSize: 11
             color: root.stationFaint
@@ -971,45 +999,11 @@ Panel {
           }
         }
 
-        // Refresh row
+        // Last refresh timestamp (the refresh control itself is the
+        // icon-only button at the top-right of the hero).
         Column {
           width: parent.width
           spacing: 4
-
-          Rectangle {
-            width: parent.width
-            height: root.btnHeight
-            radius: 6
-            color: root.stationEdge
-            opacity: statusProcess.running ? 0.55 : 1
-
-            Row {
-              anchors.centerIn: parent
-              spacing: 8
-
-              Text {
-                text: "󰑓"
-                font.family: root.fontFamily
-                font.pixelSize: 14
-                color: root.foreground
-              }
-
-              Text {
-                text: statusProcess.running ? "Refreshing…" : "Refresh status"
-                font.family: root.fontFamily
-                font.pixelSize: 12
-                font.bold: true
-                color: root.foreground
-              }
-            }
-
-            MouseArea {
-              anchors.fill: parent
-              cursorShape: Qt.PointingHandCursor
-              enabled: !statusProcess.running
-              onClicked: root.refreshStatus()
-            }
-          }
 
           Text {
             width: parent.width
