@@ -31,7 +31,7 @@ Uso: conecta-cli <comando> [opciones]
 
   vpn status          Muestra estado de la VPN
   vpn list            Lista perfiles WireGuard de NetworkManager
-  vpn connect [name]  Conecta la VPN (default: perfil configurado)
+  vpn connect [name]  Conecta la VPN (default: perfil configurado; activates only this profile)
   vpn disconnect      Desconecta la VPN (deactivates only, profile persists)
   vpn toggle          Alterna estado de la VPN
   vpn import <file>   Importa un .conf WireGuard a NetworkManager

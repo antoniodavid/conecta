@@ -269,10 +269,39 @@ func (m *Manager) Connect() error {
 	return m.ConnectTo(m.name)
 }
 
-// ConnectTo activates the named NetworkManager profile. The wg-quick
-// fallback only applies to the configured profile (it needs the local
-// interface name, not an arbitrary NM profile name).
+// ConnectTo activates the named NetworkManager profile exclusively: every
+// OTHER active wireguard profile is deactivated first so never two are
+// active at once. Profiles come from ListProfiles (wireguard type only, so
+// other VPN kinds are never touched); inactive profiles are skipped because
+// `nmcli con down` errors on them, and the target itself is skipped. Any
+// deactivation failure aborts before bringing the target up (fail closed).
+// Unknown names fail listing the available profiles. The wg-quick fallback
+// only applies to the configured profile (it needs the local interface
+// name, not an arbitrary NM profile name).
 func (m *Manager) ConnectTo(name string) error {
+	profiles, err := m.ListProfiles()
+	if err != nil {
+		return err
+	}
+	found := false
+	available := make([]string, 0, len(profiles))
+	for _, p := range profiles {
+		available = append(available, p.Name)
+		if p.Name == name {
+			found = true
+		}
+	}
+	if !found {
+		return fmt.Errorf("unknown VPN profile %q (available: %s)", name, strings.Join(available, ", "))
+	}
+	for _, p := range profiles {
+		if p.Name == name || !p.Active {
+			continue
+		}
+		if out, err := exec.Command("nmcli", "con", "down", p.Name).CombinedOutput(); err != nil {
+			return fmt.Errorf("failed to deactivate VPN profile %q: %s: %v", p.Name, strings.TrimSpace(string(out)), err)
+		}
+	}
 	cmd := exec.Command("nmcli", "con", "up", name)
 	out, err := cmd.CombinedOutput()
 	if err == nil {

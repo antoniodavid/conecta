@@ -438,6 +438,10 @@ func cmdVPN(cfg *config.Config, args []string) {
 			}
 		}
 		if err := m.ConnectTo(target); err != nil {
+			if strings.Contains(err.Error(), "unknown VPN profile") {
+				emitError("invalid_input", err.Error())
+				return
+			}
 			emitOpError("vpn connect", err)
 			return
 		}
