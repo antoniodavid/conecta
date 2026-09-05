@@ -10,22 +10,25 @@ Panel {
   id: root
   Component.onCompleted: {
     console.log("CONECTA DEBUG: Panel instantiated, moduleName=" + moduleName)
-    console.log("CONECTA DEBUG: button implicitWidth=" + (typeof button !== "undefined" ? button.implicitWidth : "undefined"))
-    refreshStatus()
+    console.log("CONECTA DEBUG: Panel loaded, anchorItem=" + (root.anchorItem ? "set" : "null"))
+    root.requestRefresh()
   }
   moduleName: "conecta.network"
   ipcTarget: "conecta.network"
   manageIpc: false
 
+  signal requestRefresh()
+
   property var anchorItem: null
+  property var hostWidget: null
+  readonly property var barIdentity: hostWidget || root
   property bool cursorActive: false
 
-  // Data
+  // Data: status/isOn arrive live from BarWidget via injectPanel bindings.
   property var status: null
   property bool isOn: false
   // Buffered process output: SplitParser delivers line chunks, so chunks
   // accumulate until one complete JSON document parses.
-  property string statusBuffer: ""
   property string actionBuffer: ""
   // Last action/speed result shown in the popup.
   property string actionText: ""
@@ -35,7 +38,6 @@ Panel {
 
   // Paths
   readonly property string pluginDir: Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "")
-  readonly property string statusScript: pluginDir + "/bin/omarchy-conecta-status"
   readonly property string hotspotScript: pluginDir + "/bin/omarchy-conecta-hotspot"
   readonly property string vpnScript: pluginDir + "/bin/omarchy-conecta-vpn"
   readonly property string loginScript: pluginDir + "/bin/omarchy-conecta-login"
@@ -64,18 +66,10 @@ Panel {
   readonly property bool showHotspot: (setting("showHotspot", true)) === true
   readonly property bool showVPN: (setting("showVPN", true)) === true
   readonly property bool showSpeedTest: (setting("showSpeedTest", false)) === true
-  readonly property int refreshInterval: Number(setting("refreshIntervalSec", 30))
 
   // ─── Icon functions (nerd font like network plugin) ─────────────
-  function getStatusIcon() {
-    if (!isOn) return "󰤮"  // Disconnected
-    if ((status && status.connection && status.connection.status) === "needs_auth") return "󰤯"  // Needs auth
-    if ((status && status.vpn && status.vpn.connected)) return "󰲝"  // VPN connected
-    if ((status && status.hotspot && status.hotspot.active)) return "󰤨"  // Hotspot active
-    // WiFi connected - use signal strength
-    return getWifiIcon((status && status.connection && status.connection.signal !== undefined && status.connection.signal !== null ? status.connection.signal : 0))
-  }
-
+  // NOTE: getStatusIcon lives in BarWidget.qml (bar-button owner); the hero
+  // title reads it via hostWidget so the icon stays live without a copy here.
   function getWifiIcon(signalStrength) {
     // Same as network plugin: wifiIconFor
     var icons = ["󰤯", "󰤟", "󰤢", "󰤥", "󰤨"]
@@ -150,7 +144,7 @@ Panel {
 
   function connPill() {
     if (root.status === null || root.status === undefined)
-      return statusProcess.running ? "Reading" : "No data"
+      return "No data"
     var k = root.connKey()
     if (k === "connected") return "Online"
     if (k === "needs_auth") return "Login needed"
@@ -175,12 +169,11 @@ Panel {
 
   function heroSubline() {
     if (root.status === null || root.status === undefined)
-      return statusProcess.running ? "Reading status from adapters…" : "Press the refresh icon above to read the link."
+      return "Press the refresh icon above to read the link."
     var parts = root.teleSsid()
     if (root.isOn) parts = parts + "  ·  " + root.sigValue() + "%"
     var gw = root.teleGateway()
     if (gw !== "—") parts = parts + "  ·  gw " + gw
-    if (statusProcess.running) parts = parts + "  ·  updating…"
     return parts
   }
 
@@ -287,18 +280,8 @@ Panel {
     return "Finished."
   }
 
-  // ─── Status process ─────────────────────────────────────────────
-  Process {
-    id: statusProcess
-    command: ["bash", root.statusScript]
-    stdout: SplitParser {
-      onRead: data => {
-        var fed = root.feedJson(root.statusBuffer, data);
-        root.statusBuffer = fed.rest;
-        if (fed.doc) root.applyStatus(fed.doc);
-      }
-    }
-  }
+  // NOTE: status polling (statusProcess/Timer/refreshStatus) lives in
+  // BarWidget.qml; this panel asks for a re-read via requestRefresh.
 
   // ─── Action processes ───────────────────────────────────────────
   Process {
@@ -328,18 +311,8 @@ Panel {
     }
   }
 
-  function applyStatus(doc) {
-    if (doc && doc.ok === false) {
-      root.actionText = (doc.error && doc.error.message) || "request failed";
-      root.isOn = false;
-      return;
-    }
-    root.status = doc;
-    root.isOn = (doc.connection && doc.connection.status) === "connected" ||
-                (doc.connection && doc.connection.status) === "needs_auth";
-  }
-
-  // handleAction stores a human-readable action/speed result, then refreshes.
+  // handleAction stores a human-readable action/speed result, then asks the
+  // bar widget for a fresh status read.
   function handleAction(chunk, isSpeed) {
     var fed = root.feedJson(root.actionBuffer, chunk);
     root.actionBuffer = fed.rest;
@@ -353,13 +326,7 @@ Panel {
     } else {
       root.actionText = "Failed: " + ((doc.error && doc.error.message) || "unknown error");
     }
-    root.refreshStatus();
-  }
-
-  function refreshStatus() {
-    root.statusBuffer = "";
-    statusProcess.command = ["bash", root.statusScript];
-    statusProcess.running = true;
+    root.requestRefresh();
   }
 
   function runHotspot(action) {
@@ -387,26 +354,11 @@ Panel {
     loginProcess.running = true;
   }
 
-  // ─── Bar content ────────────────────────────────────────────────
-  implicitWidth: button.implicitWidth
-  implicitHeight: button.implicitHeight
-
-  BarIconButton {
-    id: button
-    anchors.fill: parent
-    bar: root.bar
-    text: root.getStatusIcon()
-    active: root.isOn
-    onPressed: function(buttonCode) {
-      if (buttonCode === Qt.LeftButton) root.toggle()
-    }
-  }
-
-  // ─── Popup content ──────────────────────────────────────────────
+  // ─── Popup content (Loader-hosted; BarWidget.qml owns the bar button) ──
   KeyboardPanel {
     id: panel
-    anchorItem: button
-    owner: root
+    anchorItem: root.anchorItem
+    owner: root.barIdentity
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
@@ -440,38 +392,11 @@ Panel {
         PanelHero {
           id: heroHeader
           width: parent.width
-          title: root.getStatusIcon() + " Conecta"
+          title: (root.hostWidget && typeof root.hostWidget.getStatusIcon === "function" ? root.hostWidget.getStatusIcon() : "") + " Conecta"
           meta: root.getStatusText()
           foreground: root.foreground
           fontFamily: root.fontFamily
         }
-        // Refresh, icon-only, aligned with the plugin name.
-        Rectangle {
-          width: 28
-          height: 28
-          radius: 14
-          anchors.right: parent.right
-          anchors.rightMargin: 2
-          anchors.verticalCenter: heroHeader.verticalCenter
-          color: root.stationEdge
-          opacity: statusProcess.running ? 0.55 : 1
-
-          Text {
-            anchors.centerIn: parent
-            text: "↻"
-            font.family: root.fontFamily
-            font.pixelSize: 14
-            color: root.foreground
-          }
-
-          MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            enabled: !statusProcess.running
-            onClicked: root.refreshStatus()
-          }
-        }
-
 
         // Signal-station hero: live meter next to the connection label.
         Rectangle {
@@ -730,7 +655,7 @@ Panel {
               height: root.btnHeight
               radius: 6
               color: root.connKey() === "connected" ? root.redWash : root.mintWash
-              opacity: loginProcess.running || (root.connKey() !== "" && root.connKey() !== "connected" && root.connKey() !== "needs_auth" && !statusProcess.running) ? 0.55 : 1
+              opacity: loginProcess.running ? 0.55 : 1
 
               Row {
                 anchors.centerIn: parent
@@ -755,11 +680,11 @@ Panel {
               MouseArea {
                 anchors.fill: parent
                 cursorShape: Qt.PointingHandCursor
-                enabled: !loginProcess.running && !statusProcess.running
+                enabled: !loginProcess.running
                 onClicked: {
                   if (root.connKey() === "connected") root.runLogin("logout")
                   else if (root.connKey() === "needs_auth") root.runLogin("login")
-                  else root.refreshStatus()
+                  else root.requestRefresh()
                 }
               }
             }
@@ -1152,14 +1077,33 @@ Panel {
         }
       }
     }
-  }
 
-  // ─── Init (moved to top with debug) ────────────────────────────
+    // Refresh overlay: icon-only, top-right next to the plugin name.
+    // Sibling of Flickable (never inside the Column: anchors are illegal there).
+    Rectangle {
+      width: 28
+      height: 28
+      radius: 14
+      anchors.top: parent.top
+      anchors.right: parent.right
+      anchors.topMargin: 10
+      anchors.rightMargin: 10
+      z: 10
+      color: root.stationEdge
 
-  Timer {
-    interval: root.refreshInterval * 1000
-    running: true
-    repeat: true
-    onTriggered: root.refreshStatus()
+      Text {
+        anchors.centerIn: parent
+        text: "↻"
+        font.family: root.fontFamily
+        font.pixelSize: 14
+        color: root.foreground
+      }
+
+      MouseArea {
+        anchors.fill: parent
+        cursorShape: Qt.PointingHandCursor
+        onClicked: root.requestRefresh()
+      }
+    }
   }
 }
