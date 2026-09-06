@@ -216,12 +216,21 @@ func (p *Portal) Logout() error {
 	body2, _ := io.ReadAll(io.LimitReader(resp2.Body, 1<<20))
 	html := string(body2)
 
-	if resp2.StatusCode == 302 || resp2.StatusCode == 301 ||
-		strings.Contains(html, "LoginServlet") || strings.Contains(html, "Bienvenido") {
+	if logoutSucceeded(resp2.StatusCode, html) {
 		return nil
 	}
 
 	return fmt.Errorf("logout failed: HTTP %d", resp2.StatusCode)
+}
+
+// logoutSucceeded classifies a logout response as success. ETECSA answers
+// HTTP 200 (markerless) on logout, while other paths redirect (301/302) or
+// return the login-page markers. Any 2xx is treated as success.
+func logoutSucceeded(code int, html string) bool {
+	return code == 301 || code == 302 ||
+		(code >= 200 && code < 300) ||
+		strings.Contains(html, "LoginServlet") ||
+		strings.Contains(html, "Bienvenido")
 }
 
 // ClassifyLoginResponse is the pure login classifier: known success markers map

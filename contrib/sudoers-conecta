@@ -1,0 +1,21 @@
+# Conecta hotspot/NAT privilege drop-in (template).
+# Install with: ./deploy.sh --setup-privileges  (renders this file with the
+# real user and validates it before installing).
+# Replace __USER__ with the target username if installing manually.
+#
+# Grants NOPASSWD root ONLY for the exact commands conecta runs, each in the
+# exact argv form the CLI invokes (sudoers matches commands argument by
+# argument, so e.g. `/usr/bin/nmcli r wifi off` does NOT allow `nmcli` with
+# any other arguments).
+Cmnd_Alias CONECTA_CMDS = \
+    /usr/bin/systemctl is-active create_ap, \
+    /usr/bin/systemctl start create_ap, \
+    /usr/bin/systemctl stop create_ap, \
+    /usr/bin/tee /etc/create_ap.conf, \
+    /usr/bin/killall hostapd, \
+    /usr/bin/killall dnsmasq, \
+    /usr/bin/nmcli r wifi off, \
+    /usr/bin/nmcli r wifi on, \
+    /usr/bin/rfkill unblock wlan
+
+__USER__ ALL=(root) NOPASSWD: CONECTA_CMDS

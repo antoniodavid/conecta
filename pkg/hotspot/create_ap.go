@@ -30,12 +30,12 @@ func (c *CreateAP) Start() error {
 		return err
 	}
 	// Kill any stale processes
-	exec.Command("killall", "hostapd").Run()
-	exec.Command("killall", "dnsmasq").Run()
+	exec.Command("sudo", "killall", "hostapd").Run()
+	exec.Command("sudo", "killall", "dnsmasq").Run()
 
 	// Disable WiFi managed mode
-	exec.Command("nmcli", "r", "wifi", "off").Run()
-	exec.Command("rfkill", "unblock", "wlan").Run()
+	exec.Command("sudo", "nmcli", "r", "wifi", "off").Run()
+	exec.Command("sudo", "rfkill", "unblock", "wlan").Run()
 
 	// Write config
 	if err := c.writeConfig(); err != nil {
@@ -62,7 +62,7 @@ func (c *CreateAP) Stop() error {
 	}
 
 	// Re-enable WiFi
-	exec.Command("nmcli", "r", "wifi", "on").Run()
+	exec.Command("sudo", "nmcli", "r", "wifi", "on").Run()
 
 	return nil
 }
@@ -150,7 +150,18 @@ ADDN_HOSTS=`,
 		c.config.Passphrase,
 	)
 
-	return os.WriteFile("/etc/create_ap.conf", []byte(config), 0644)
+	// Write config through sudo tee: /etc/create_ap.conf is root-owned.
+	// The exact config bytes are fed via stdin, so sudo never sees them as
+	// arguments (no quoting issues, no shell interpretation).
+	cmd := exec.Command("sudo", "tee", "/etc/create_ap.conf")
+	cmd.Stdin = strings.NewReader(config)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			return fmt.Errorf("sudo tee /etc/create_ap.conf failed: %w (%s)", err, msg)
+		}
+		return fmt.Errorf("sudo tee /etc/create_ap.conf failed: %w", err)
+	}
+	return nil
 }
 
 func (c *CreateAP) readConfig(s *Status) {
@@ -200,9 +211,11 @@ func ParseIWInterfaces(output string) ([]string, error) {
 
 // checkAuthz verifies non-interactive privilege before destructive steps.
 // It fails closed: denied or unavailable authz returns an authz error.
+// The probe runs an actually-allowed command: the scoped sudoers drop-in
+// (contrib/sudoers-conecta) does not permit plain `true`.
 func checkAuthz() error {
-	if err := exec.Command("sudo", "-n", "true").Run(); err != nil {
-		return fmt.Errorf("authz: privileged action denied or unavailable (sudo -n true failed): %w", err)
+	if err := exec.Command("sudo", "-n", "systemctl", "is-active", "create_ap").Run(); err != nil {
+		return fmt.Errorf("authz: privileged action denied or unavailable (sudoers drop-in missing; run ./deploy.sh --setup-privileges): %w", err)
 	}
 	return nil
 }

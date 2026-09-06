@@ -87,3 +87,29 @@ func TestDefaultConfig(t *testing.T) {
 		t.Errorf("DefaultConfig().PortalURL = %q, want %q", cfg.PortalURL, "https://secure.etecsa.net:8443")
 	}
 }
+
+func TestLogoutSucceeded(t *testing.T) {
+	tests := []struct {
+		name string
+		code int
+		html string
+		want bool
+	}{
+		{name: "200 markerless is success", code: 200, html: "", want: true},
+		{name: "204 is success", code: 204, html: "", want: true},
+		{name: "302 redirect is success", code: 302, html: "", want: true},
+		{name: "301 redirect is success", code: 301, html: "", want: true},
+		{name: "500 is failure", code: 500, html: "", want: false},
+		{name: "404 is failure", code: 404, html: "", want: false},
+		{name: "200 with LoginServlet marker is success", code: 200, html: `<form action="LoginServlet">`, want: true},
+		{name: "302 with marker is success", code: 302, html: "Bienvenido", want: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := logoutSucceeded(tt.code, tt.html); got != tt.want {
+				t.Errorf("logoutSucceeded(%d, %q) = %v, want %v", tt.code, tt.html, got, tt.want)
+			}
+		})
+	}
+}

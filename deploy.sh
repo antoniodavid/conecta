@@ -1,8 +1,9 @@
 #!/bin/bash
 # Build and deploy conecta: binaries -> $BIN_DIR, plugin -> Omarchy plugins dir.
-# Usage: ./deploy.sh [--check] [--no-plugin]
-#   --check      run go test ./... before installing (slower, safer)
-#   --no-plugin  skip the Omarchy plugin install
+# Usage: ./deploy.sh [--check] [--no-plugin] [--setup-privileges]
+#   --check              run go test ./... before installing (slower, safer)
+#   --no-plugin          skip the Omarchy plugin install
+#   --setup-privileges   install the hotspot sudoers drop-in (self-sudoes), then exit
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -22,12 +23,17 @@ for arg in "$@"; do
   case "$arg" in
     --check) CHECK=true ;;
     --no-plugin) NO_PLUGIN=true ;;
+    --setup-privileges)
+      bash "$ROOT/scripts/setup-privileges.sh"
+      exit 0
+      ;;
     -h|--help)
       printf '%s\n' \
         'Build and deploy conecta.' \
-        'Usage: ./deploy.sh [--check] [--no-plugin]' \
-        '  --check      run go test ./... before installing' \
-        '  --no-plugin  skip the Omarchy plugin install'
+        'Usage: ./deploy.sh [--check] [--no-plugin] [--setup-privileges]' \
+        '  --check              run go test ./... before installing' \
+        '  --no-plugin          skip the Omarchy plugin install' \
+        '  --setup-privileges   install the hotspot sudoers drop-in, then exit'
       exit 0
       ;;
     *) echo "Unknown flag: $arg (see --help)" >&2; exit 2 ;;

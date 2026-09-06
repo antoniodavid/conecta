@@ -61,16 +61,27 @@ conecta-cli status
 
 ### Privilegios y autorización no interactiva
 
-Las acciones privilegiadas (hotspot, NAT, VPN) requieren autorización
-previamente configurada: el CLI verifica `sudo -n true` **antes** de
-cualquier paso destructivo y falla cerrado (código de salida `4`,
+Las acciones privilegiadas (hotspot, NAT) requieren autorización
+previamente configurada: el CLI verifica `sudo -n systemctl is-active create_ap`
+**antes** de cualquier paso destructivo y falla cerrado (código de salida `4`,
 sin modificar el host) cuando la autorización falta o es denegada.
 Un widget de barra no tiene forma de pedir contraseña, por lo que las
-acciones de hotspot/NAT/VPN lanzadas desde la barra quedan deshabilitadas
-hasta que exista una configuración autorizada (por ejemplo, una entrada
-NOPASSWD de sudoers instalada por root para los comandos documentados).
-Las operaciones de solo lectura (`status`, clientes) y el login al portal
-no requieren privilegios.
+acciones de hotspot/NAT lanzadas desde la barra quedan deshabilitadas
+hasta que exista la configuración autorizada.
+
+Configuración única (requiere sudo de administrador):
+
+```bash
+./deploy.sh --setup-privileges
+```
+
+Instala `/etc/sudoers.d/conecta` a partir de `contrib/sudoers-conecta`:
+NOPASSWD root **solo** para los comandos exactos que ejecuta el CLI
+(`systemctl is-active|start|stop create_ap`, `tee /etc/create_ap.conf`,
+`killall hostapd dnsmasq`, `nmcli r wifi off|on`, `rfkill unblock wlan`).
+Sin esta configuración, `conecta-cli hotspot start|stop` y
+`conecta-cli nat setup` fallan con código de salida `4`. Las operaciones de
+solo lectura (`status`, clientes) y el login al portal no requieren privilegios.
 
 Propiedad de la instalación:
 
@@ -457,6 +468,17 @@ which create_ap
 # Verificar servicios
 systemctl status create_ap
 ```
+
+**Error: "authz: privileged action denied or unavailable"**
+
+El CLI no tiene autorización sudo para los comandos del hotspot (falta la
+entrada NOPASSWD). Instálala una vez (requiere sudo de administrador):
+
+```bash
+./deploy.sh --setup-privileges
+```
+
+Luego reintenta `conecta-cli hotspot start|stop`.
 
 **Hotspot activo pero sin internet**
 
