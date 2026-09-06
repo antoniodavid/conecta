@@ -202,6 +202,57 @@ else
   echo "PASS: vpn import single exit 0"
 fi
 
+# 12. login/logout/speed failure matrix: failure JSON + propagated exit,
+# never synthesized success (logout success only on exit 0).
+for action in login logout speed; do
+  for mode in invalid opfail authz; do
+    case "$mode" in
+      invalid) want=2;; opfail) want=3;; authz) want=4;;
+    esac
+    export STUB_MODE="$mode"
+    out=$(bash "$BIN/omarchy-conecta-login" "$action" 2>/dev/null); rc=$?
+    echo "$out" | jq -e '.ok == false' >/dev/null 2>&1 || { echo "FAIL: login $action ($mode) must be failure JSON: [$out]"; FAIL=1; }
+    if [ "$rc" -ne "$want" ]; then
+      echo "FAIL: login $action ($mode) exit=$rc want $want"
+      FAIL=1
+    else
+      echo "PASS: login $action ($mode) exit $want"
+    fi
+    if echo "$out" | grep -q '"success":true'; then
+      echo "FAIL: login $action ($mode) reports success on failure: [$out]"
+      FAIL=1
+    fi
+  done
+done
+
+# 13. logout success passthrough: stub ok yields verbatim JSON + exit 0.
+export STUB_MODE=ok
+out=$(bash "$BIN/omarchy-conecta-login" logout 2>/dev/null); rc=$?
+echo "$out" | jq -e '.ok == true' >/dev/null 2>&1 || { echo "FAIL: login logout ok must be success JSON: [$out]"; FAIL=1; }
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL: login logout ok exit=$rc want 0"
+  FAIL=1
+else
+  echo "PASS: login logout ok exit 0"
+fi
+
+# 14. CLI failing with empty stdout still yields one failure JSON doc +
+# propagated exit (covers crashed/missing CLI: no silence, one JSON line).
+cat > "$TMP/stub-empty" <<'EOF'
+#!/bin/bash
+echo "dial tcp 10.180.0.30:8443: i/o timeout" >&2
+exit 3
+EOF
+chmod +x "$TMP/stub-empty"
+out=$(CONNECTA_CLI="$TMP/stub-empty" bash "$BIN/omarchy-conecta-login" logout 2>/dev/null); rc=$?
+echo "$out" | jq -e '.ok == false' >/dev/null 2>&1 || { echo "FAIL: login logout empty-stdout must be failure JSON: [$out]"; FAIL=1; }
+if [ "$rc" -ne 3 ]; then
+  echo "FAIL: login logout empty-stdout exit=$rc want 3"
+  FAIL=1
+else
+  echo "PASS: login logout empty-stdout exit 3"
+fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "ADAPTER CONTRACT: RED (failing as expected before fix)"
   exit 1

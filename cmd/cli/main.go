@@ -182,6 +182,36 @@ func parseLoginFlags(args []string) (user, pass string, rest []string, err error
 	return *u, *p, fs.Args(), nil
 }
 
+// vpnPortalHint explains the off-VPN-only portal to users who hit it with
+// the VPN up. The ETECSA portal is a private IP reachable only off-VPN.
+const vpnPortalHint = "hint: the portal is reachable only with the VPN down — run `conecta-cli vpn disconnect` first, then retry"
+
+// vpnStatusCheck reports whether the VPN is connected. A variable (not a
+// direct manager call) so tests inject a stub and never exec nmcli.
+var vpnStatusCheck = func(iface, name string) bool {
+	st, err := vpn.NewManager(iface, name).Status()
+	return err == nil && st != nil && st.Connected
+}
+
+// withPortalVPNHint appends the disconnect-VPN guidance to portal-access
+// failures when the VPN is up. Pure: vpnConnected is injected, so unit
+// tests never touch nmcli. Non-portal errors pass through unchanged, and
+// the envelope code/exit mapping is untouched (guidance lives in the
+// message string only).
+func withPortalVPNHint(err error, vpnConnected bool) error {
+	if err == nil || !vpnConnected {
+		return err
+	}
+	lower := strings.ToLower(err.Error())
+	// GET-phase markers: both Login and Logout hit GET portal first, so a
+	// VPN-up unreachable portal always surfaces through one of these.
+	if strings.Contains(lower, "cannot access portal") ||
+		strings.Contains(lower, "portal unreachable") {
+		return fmt.Errorf("%s (%s)", err.Error(), vpnPortalHint)
+	}
+	return err
+}
+
 func cmdLogin(cfg *config.Config, args []string) {
 	u, p, extra, err := parseLoginFlags(args)
 	if err != nil {
@@ -213,7 +243,7 @@ func cmdLogin(cfg *config.Config, args []string) {
 
 	conn, err := portal.Login(u, p)
 	if err != nil {
-		emitOpError("login", err)
+		emitOpError("login", withPortalVPNHint(err, vpnStatusCheck(cfg.VPN.Interface, cfg.VPN.Name)))
 		return
 	}
 	emitResult(map[string]any{"status": conn.Status.String()})
@@ -227,7 +257,7 @@ func cmdLogout(cfg *config.Config) {
 	})
 
 	if err := portal.Logout(); err != nil {
-		emitOpError("logout", err)
+		emitOpError("logout", withPortalVPNHint(err, vpnStatusCheck(cfg.VPN.Interface, cfg.VPN.Name)))
 		return
 	}
 	emitResult(map[string]any{"logged_out": true})

@@ -410,6 +410,8 @@ conecta-cli nat setup
 
 **Error: "Portal inalcanzable"**
 
+- Si la VPN está activa, desconéctala primero (`conecta-cli vpn disconnect`): el portal solo es accesible sin VPN.
+
 ```bash
 # Verificar que el cable esté conectado
 ip link show enp3s0

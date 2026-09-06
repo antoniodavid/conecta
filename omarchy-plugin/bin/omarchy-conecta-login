@@ -25,6 +25,15 @@ case "$ACTION" in
     ;;
 esac
 
-out=$("$CONNECTA_CLI" "$ACTION" 2>/dev/null); rc=$?
+# Passthrough with a guard: valid CLI output goes out verbatim with the CLI
+# exit (success only on exit 0). A nonzero exit with empty/non-JSON stdout
+# (crashed/missing CLI) still yields one failure document — never silence,
+# never synthesized success. CLI stderr flows to our stderr (diagnostics),
+# never to stdout; the decision uses stdout + exit code only.
+out=$("$CONNECTA_CLI" "$ACTION"); rc=$?
+if [ "$rc" -ne 0 ] && ! printf '%s' "$out" | jq -e . >/dev/null 2>&1; then
+  printf '{"ok":false,"error":{"code":"op_failed","message":"conecta-cli %s failed with exit %d"}}' "$ACTION" "$rc"
+  exit "$rc"
+fi
 printf '%s' "$out"
 exit "$rc"
