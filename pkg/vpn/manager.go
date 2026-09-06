@@ -341,37 +341,80 @@ func (m *Manager) Import(path string) (string, error) {
 	return strings.TrimSuffix(base, ".conf"), nil
 }
 
-// Disconnect deactivates the VPN without deleting anything:
+// DisconnectTo deactivates the named profile without deleting anything:
 // `nmcli con down` only deactivates the profile (it stays listed by
-// `vpn list` as inactive), and the `wg-quick down` fallback only removes
-// the runtime interface, never the conf file.
-func (m *Manager) Disconnect() error {
-	// Try NetworkManager first
-	cmd := exec.Command("nmcli", "con", "down", m.name)
-	out, err := cmd.CombinedOutput()
+// `vpn list` as inactive). Unknown names fail listing the available
+// profiles. A profile that is already inactive is a no-op (disconnect is
+// deactivate-only, never delete). On nmcli down failure the wg-quick
+// fallback (`sudo wg-quick down <iface>`) only applies to the configured
+// profile (it needs the local interface name, not an arbitrary NM profile
+// name); otherwise the nmcli error is surfaced.
+func (m *Manager) DisconnectTo(name string) error {
+	profiles, err := m.ListProfiles()
 	if err != nil {
-		// Try wg-quick as fallback
-		cmd = exec.Command("sudo", "wg-quick", "down", m.iface)
-		out, err = cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("failed to disconnect VPN: %s", string(out))
+		return err
+	}
+	found := false
+	active := false
+	available := make([]string, 0, len(profiles))
+	for _, p := range profiles {
+		available = append(available, p.Name)
+		if p.Name == name {
+			found = true
+			if p.Active {
+				active = true
+			}
+		}
+	}
+	if !found {
+		return fmt.Errorf("unknown VPN profile %q (available: %s)", name, strings.Join(available, ", "))
+	}
+	if !active {
+		return nil
+	}
+	out, err := exec.Command("nmcli", "con", "down", name).CombinedOutput()
+	if err == nil {
+		return nil
+	}
+	if name != m.name {
+		return fmt.Errorf("failed to deactivate VPN profile %q: %s: %v", name, strings.TrimSpace(string(out)), err)
+	}
+	out, err = exec.Command("sudo", "wg-quick", "down", m.iface).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to disconnect VPN: %s", string(out))
+	}
+	return nil
+}
+
+// Disconnect deactivates the first active profile (deactivate-only, never
+// delete). With no active profile it is a no-op.
+func (m *Manager) Disconnect() error {
+	profiles, err := m.ListProfiles()
+	if err != nil {
+		return err
+	}
+	for _, p := range profiles {
+		if p.Active {
+			return m.DisconnectTo(p.Name)
 		}
 	}
 	return nil
 }
 
-// Toggle switches VPN on/off
+// Toggle switches VPN on/off: any active profile is disconnected (returns
+// false); otherwise the configured profile is connected exclusively
+// (returns true).
 func (m *Manager) Toggle() (bool, error) {
-	status, err := m.Status()
+	profiles, err := m.ListProfiles()
 	if err != nil {
 		return false, err
 	}
-
-	if status.Connected {
-		err = m.Disconnect()
-		return false, err
+	for _, p := range profiles {
+		if p.Active {
+			err = m.DisconnectTo(p.Name)
+			return false, err
+		}
 	}
-
 	err = m.Connect()
 	return true, err
 }

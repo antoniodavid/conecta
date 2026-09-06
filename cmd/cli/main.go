@@ -490,11 +490,32 @@ func cmdVPN(cfg *config.Config, args []string) {
 		emitResult(map[string]any{"action": "import", "name": name, "file": args[1]})
 
 	case "disconnect":
-		if err := m.Disconnect(); err != nil {
-			emitOpError("vpn disconnect", err)
+		if len(args) > 2 {
+			emitError("invalid_input", fmt.Sprintf("unexpected vpn disconnect args: %v", args[1:]))
 			return
 		}
-		emitResult(map[string]any{"action": "disconnect", "connected": false})
+		target := ""
+		if len(args) == 2 {
+			target = args[1]
+			if target == "" {
+				emitError("invalid_input", "vpn disconnect requires a non-empty profile name")
+				return
+			}
+			if err := m.DisconnectTo(target); err != nil {
+				if strings.Contains(err.Error(), "unknown VPN profile") {
+					emitError("invalid_input", err.Error())
+					return
+				}
+				emitOpError("vpn disconnect", err)
+				return
+			}
+		} else {
+			if err := m.Disconnect(); err != nil {
+				emitOpError("vpn disconnect", err)
+				return
+			}
+		}
+		emitResult(map[string]any{"action": "disconnect", "connected": false, "name": target})
 
 	case "toggle":
 		connected, err := m.Toggle()

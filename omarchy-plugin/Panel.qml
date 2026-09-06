@@ -347,6 +347,12 @@ Panel {
     vpnProcess.running = true;
   }
 
+  function runVPNDisconnect(name) {
+    root.actionBuffer = "";
+    vpnProcess.command = ["bash", root.vpnScript, "disconnect", name];
+    vpnProcess.running = true;
+  }
+
   function runLogin(action) {
     root.actionBuffer = "";
     root.loginAction = action;
@@ -903,8 +909,11 @@ Panel {
                   MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    enabled: !vpnProcess.running && !root.vpnRowActive(modelData)
-                    onClicked: root.runVPNConnect(root.vpnRowName(modelData))
+                    enabled: !vpnProcess.running
+                    onClicked: {
+                      if (root.vpnRowActive(modelData)) root.runVPNDisconnect(root.vpnRowName(modelData))
+                      else root.runVPNConnect(root.vpnRowName(modelData))
+                    }
                   }
                 }
               }

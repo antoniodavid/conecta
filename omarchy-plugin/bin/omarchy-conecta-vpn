@@ -16,14 +16,14 @@ CONNECTA_CLI="${CONNECTA_CLI:-conecta-cli}"
 CONECTA_IMPORT_DIR="${CONECTA_IMPORT_DIR:-$HOME/.config/conecta/import}"
 
 usage_json() {
-  printf '%s' '{"ok":false,"error":{"code":"invalid_input","message":"usage: omarchy-conecta-vpn {connect [name]|disconnect|toggle|status|list|import [file]}"}}'
+  printf '%s' '{"ok":false,"error":{"code":"invalid_input","message":"usage: omarchy-conecta-vpn {connect [name]|disconnect [name]|toggle|status|list|import [file]}"}}'
 }
 
 ACTION="${1:-}"
 case "$ACTION" in
   connect|disconnect|toggle|status|list|import) ;;
   *)
-    echo "Usage: $0 {connect [name]|disconnect|toggle|status|list|import [file]}" >&2
+    echo "Usage: $0 {connect [name]|disconnect [name]|toggle|status|list|import [file]}" >&2
     usage_json
     exit 2
     ;;
@@ -83,6 +83,13 @@ fi
 # connect [name]: forward the optional profile name as fixed argv.
 if [ "$ACTION" = "connect" ] && [ $# -ge 2 ]; then
   out=$("$CONNECTA_CLI" vpn connect "$2" 2>/dev/null); rc=$?
+  printf '%s' "$out"
+  exit "$rc"
+fi
+
+# disconnect [name]: forward the optional profile name as fixed argv.
+if [ "$ACTION" = "disconnect" ] && [ $# -ge 2 ]; then
+  out=$("$CONNECTA_CLI" vpn disconnect "$2" 2>/dev/null); rc=$?
   printf '%s' "$out"
   exit "$rc"
 fi

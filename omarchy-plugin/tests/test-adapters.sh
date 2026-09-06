@@ -253,6 +253,63 @@ else
   echo "PASS: login logout empty-stdout exit 3"
 fi
 
+# 15. VPN disconnect [name]: dedicated block forwards the name as fixed
+# argv; without a name the generic fallthrough runs. CLI failures propagate
+# their failure JSON + exit; success passes through verbatim.
+cat > "$TMP/stub-vpn-disc" <<'EOF'
+#!/bin/bash
+if [ "${1:-}" != "vpn" ] || [ "${2:-}" != "disconnect" ]; then
+  echo '{"ok":false,"error":{"code":"op_failed","message":"unexpected"}}'
+  exit 3
+fi
+case "${3:-}" in
+  Nope) echo '{"ok":false,"error":{"code":"invalid_input","message":"unknown VPN profile \"Nope\" (available: USA)"}}'; exit 2 ;;
+  *) echo '{"ok":true,"data":{"action":"disconnect","connected":false,"name":"USA"}}'; exit 0 ;;
+esac
+EOF
+chmod +x "$TMP/stub-vpn-disc"
+
+# 15a. disconnect with a name, success: verbatim passthrough + exit 0.
+out=$(CONNECTA_CLI="$TMP/stub-vpn-disc" bash "$BIN/omarchy-conecta-vpn" disconnect USA 2>/dev/null); rc=$?
+echo "$out" | jq -e '.ok == true and .data.name == "USA"' >/dev/null 2>&1 || { echo "FAIL: vpn disconnect USA not passed verbatim: [$out]"; FAIL=1; }
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL: vpn disconnect USA exit=$rc want 0"
+  FAIL=1
+else
+  echo "PASS: vpn disconnect USA passthrough exit 0"
+fi
+
+# 15b. disconnect without a name, success: generic fallthrough, verbatim + exit 0.
+out=$(CONNECTA_CLI="$TMP/stub-vpn-disc" bash "$BIN/omarchy-conecta-vpn" disconnect 2>/dev/null); rc=$?
+echo "$out" | jq -e '.ok == true and .data.name == "USA"' >/dev/null 2>&1 || { echo "FAIL: vpn disconnect no-name not passed verbatim: [$out]"; FAIL=1; }
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL: vpn disconnect no-name exit=$rc want 0"
+  FAIL=1
+else
+  echo "PASS: vpn disconnect no-name passthrough exit 0"
+fi
+
+# 15c. disconnect with an unknown name: failure JSON + propagated exit 2.
+out=$(CONNECTA_CLI="$TMP/stub-vpn-disc" bash "$BIN/omarchy-conecta-vpn" disconnect Nope 2>/dev/null); rc=$?
+echo "$out" | jq -e '.ok == false and .error.code == "invalid_input"' >/dev/null 2>&1 || { echo "FAIL: vpn disconnect Nope must be invalid_input failure JSON: [$out]"; FAIL=1; }
+if [ "$rc" -ne 2 ]; then
+  echo "FAIL: vpn disconnect Nope exit=$rc want 2"
+  FAIL=1
+else
+  echo "PASS: vpn disconnect Nope exit 2"
+fi
+
+# 15d. disconnect without a name, CLI failure: failure JSON + propagated exit 3.
+export STUB_MODE=opfail
+out=$(bash "$BIN/omarchy-conecta-vpn" disconnect 2>/dev/null); rc=$?
+echo "$out" | jq -e '.ok == false and .error.code == "op_failed"' >/dev/null 2>&1 || { echo "FAIL: vpn disconnect opfail must be failure JSON: [$out]"; FAIL=1; }
+if [ "$rc" -ne 3 ]; then
+  echo "FAIL: vpn disconnect opfail exit=$rc want 3"
+  FAIL=1
+else
+  echo "PASS: vpn disconnect opfail exit 3"
+fi
+
 if [ "$FAIL" -ne 0 ]; then
   echo "ADAPTER CONTRACT: RED (failing as expected before fix)"
   exit 1
