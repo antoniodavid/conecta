@@ -477,7 +477,17 @@ func cmdVPN(cfg *config.Config, args []string) {
 			emitOpError("vpn connect", err)
 			return
 		}
-		emitResult(map[string]any{"action": "connect", "connected": true, "name": target})
+		data := map[string]any{"action": "connect", "connected": true, "name": target}
+		// The portal net is a private route over the physical gateway: keep
+		// it reachable while the VPN is up (a full-tunnel VPN would otherwise
+		// blackhole it). Best-effort: connect still succeeds when the route
+		// cannot be ensured; portal_route surfaces the outcome.
+		if err := network.EnsurePortalRoute(cfg.Network.Gateway, cfg.Network.Interface); err != nil {
+			data["portal_route"] = err.Error()
+		} else {
+			data["portal_route"] = "ok"
+		}
+		emitResult(data)
 
 	case "import":
 		if len(args) != 2 {

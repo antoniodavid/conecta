@@ -78,7 +78,8 @@ Configuración única (requiere sudo de administrador):
 Instala `/etc/sudoers.d/conecta` a partir de `contrib/sudoers-conecta`:
 NOPASSWD root **solo** para los comandos exactos que ejecuta el CLI
 (`systemctl is-active|start|stop create_ap`, `tee /etc/create_ap.conf`,
-`killall hostapd dnsmasq`, `nmcli r wifi off|on`, `rfkill unblock wlan`).
+`killall hostapd dnsmasq`, `nmcli r wifi off|on`, `rfkill unblock wlan`,
+la ruta al portal `ip route add 10.180.0.0/16 via <gw> dev <iface>`).
 Sin esta configuración, `conecta-cli hotspot start|stop` y
 `conecta-cli nat setup` fallan con código de salida `4`. Las operaciones de
 solo lectura (`status`, clientes) y el login al portal no requieren privilegios.
@@ -421,7 +422,10 @@ conecta-cli nat setup
 
 **Error: "Portal inalcanzable"**
 
-- Si la VPN está activa, desconéctala primero (`conecta-cli vpn disconnect`): el portal solo es accesible sin VPN.
+- Si la VPN está activa y el portal no responde, verifica primero la ruta
+  estática que conecta añade al conectar (ver «Portal ETECSA con la VPN
+  activa» en Problemas de VPN); como último recurso, desconéctala
+  (`conecta-cli vpn disconnect`) e introduce la ruta manualmente.
 
 ```bash
 # Verificar que el cable esté conectado
@@ -518,6 +522,27 @@ nmcli con show --active | grep wireguard
 
 # Conectar manualmente
 nmcli con up USA
+```
+
+**Portal ETECSA con la VPN activa**
+
+`conecta-cli vpn connect` asegura la ruta estática del portal
+(`10.180.0.0/16 via el gateway físico`) para que el portal siga alcanzable
+mientras la VPN está activa; una VPN de túnel completo bloquearía esa red
+privada sin la ruta. Es best-effort: el connect no falla si la ruta no se
+puede añadir, pero el resultado incluye `"portal_route": "ok"` (o el mensaje
+de error) para diagnosticarlo. La ruta se añade con `sudo` y requiere el
+drop-in de sudoers; si falla, re-ejecuta la configuración de privilegios:
+
+```bash
+./deploy.sh --setup-privileges
+```
+
+Verificación y adición manual:
+
+```bash
+ip route show 10.180.0.0/16
+sudo ip route add 10.180.0.0/16 via 192.168.1.1 dev enp3s0
 ```
 
 **VPN conectada pero sin internet**
