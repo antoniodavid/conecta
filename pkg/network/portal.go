@@ -221,7 +221,25 @@ func (p *Portal) Login(user, pass string) (*Connection, error) {
 	body2, _ := io.ReadAll(io.LimitReader(resp2.Body, 1<<20))
 	respHTML := string(body2)
 
-	return p.parseLoginResponse(resp2.StatusCode, respHTML, conn)
+	conn, err = p.parseLoginResponse(resp2.StatusCode, respHTML, conn)
+	if err != nil {
+		return conn, err
+	}
+	// parseLoginResponse returns nil only for PortalConnected (fast-path
+	// markers); any other status fails closed.
+	if conn.Status != PortalConnected {
+		conn.Status = PortalError
+		conn.LastError = fmt.Errorf("login failed: unrecognized portal response")
+		return conn, conn.LastError
+	}
+	// Never claim success from the POST alone: verify the session actually
+	// established by re-reading the portal page (short probe client, shared jar).
+	if verr := verifyLogin(p.fetchPortalPage); verr != nil {
+		conn.Status = PortalError
+		conn.LastError = verr
+		return conn, verr
+	}
+	return conn, nil
 }
 
 // Logout terminates the session
@@ -270,6 +288,32 @@ func logoutVerdict(page string) error {
 	default:
 		return fmt.Errorf("cannot verify logout: portal returned an unrecognized page")
 	}
+}
+
+// loginVerdict decides whether a post-login portal page proves the session
+// established. Only a session page (connected) is proof: a login page means
+// the credentials were rejected or the session did not establish, and an
+// unrecognized page fails closed (success is never claimed without evidence).
+func loginVerdict(page string) error {
+	switch classifyPortalPage(page) {
+	case PortalConnected:
+		return nil
+	case PortalNeedsAuth:
+		return fmt.Errorf("login failed: portal still requires authentication")
+	default:
+		return fmt.Errorf("login failed: portal returned an unrecognized page")
+	}
+}
+
+// verifyLogin re-reads the portal page after a login POST to confirm the
+// session actually established. fetch is injected so tests can exercise
+// every verdict without the network; a fetch failure fails closed.
+func verifyLogin(fetch func() (string, error)) error {
+	page, err := fetch()
+	if err != nil {
+		return fmt.Errorf("cannot verify login: %w", err)
+	}
+	return loginVerdict(page)
 }
 
 // ClassifyLoginResponse is the pure login classifier: known success markers map

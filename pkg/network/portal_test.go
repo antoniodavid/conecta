@@ -1,6 +1,7 @@
 package network
 
 import (
+	"errors"
 	"strings"
 	"testing"
 )
@@ -137,6 +138,64 @@ func TestLogoutVerdict(t *testing.T) {
 			}
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("logoutVerdict(%q) error = %v, want containing %q", tt.page, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLoginVerdict(t *testing.T) {
+	tests := []struct {
+		name    string
+		page    string
+		wantErr string // "" means success
+	}{
+		{name: "session page after login is success", page: "usted ya está conectado", wantErr: ""},
+		{name: "session marker ya conectado is success", page: "usuario ya conectado", wantErr: ""},
+		{name: "login page means rejected", page: `<form action="LoginServlet">Bienvenido</form>`, wantErr: "portal still requires authentication"},
+		{name: "login marker only means rejected", page: "LoginServlet", wantErr: "portal still requires authentication"},
+		{name: "empty page fails closed", page: "", wantErr: "portal returned an unrecognized page"},
+		{name: "unknown page fails closed", page: "<html>proxy notice</html>", wantErr: "portal returned an unrecognized page"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := loginVerdict(tt.page)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("loginVerdict(%q) = %v, want success", tt.page, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("loginVerdict(%q) error = %v, want containing %q", tt.page, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestVerifyLogin(t *testing.T) {
+	tests := []struct {
+		name    string
+		fetch   func() (string, error)
+		wantErr string // "" means success
+	}{
+		{name: "connected page is success", fetch: func() (string, error) { return "usted ya está conectado", nil }, wantErr: ""},
+		{name: "needs auth page is rejected", fetch: func() (string, error) { return `<form action="LoginServlet">Bienvenido</form>`, nil }, wantErr: "portal still requires authentication"},
+		{name: "unknown page fails closed", fetch: func() (string, error) { return "<html>proxy notice</html>", nil }, wantErr: "portal returned an unrecognized page"},
+		{name: "fetch error fails closed", fetch: func() (string, error) { return "", errors.New("boom") }, wantErr: "cannot verify login"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := verifyLogin(tt.fetch)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("verifyLogin = %v, want success", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("verifyLogin error = %v, want containing %q", err, tt.wantErr)
 			}
 		})
 	}
