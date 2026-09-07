@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"errors"
 	"flag"
 	"fmt"
@@ -176,10 +177,21 @@ func parseLoginFlags(args []string) (user, pass string, rest []string, err error
 	fs := flag.NewFlagSet("login", flag.ContinueOnError)
 	u := fs.String("user", "", "Username")
 	p := fs.String("pass", "", "Password")
+	passStdin := fs.Bool("pass-stdin", false, "Read password from stdin (avoid argv disclosure)")
 	// Flag errors go to stderr; contract failure goes to stdout with exit 2.
 	fs.SetOutput(os.Stderr)
 	if err := fs.Parse(args); err != nil {
 		return "", "", nil, err
+	}
+	if *p == "" && os.Getenv("CONECTA_PASS") != "" {
+		*p = os.Getenv("CONECTA_PASS")
+	}
+	if *p == "" && *passStdin {
+		line, rerr := bufio.NewReader(os.Stdin).ReadString('\n')
+		if rerr != nil && line == "" {
+			return "", "", nil, fmt.Errorf("cannot read password from stdin: %v", rerr)
+		}
+		*p = strings.TrimRight(strings.TrimRight(line, "\n"), "\r")
 	}
 	return *u, *p, fs.Args(), nil
 }
@@ -232,9 +244,16 @@ func cmdLogin(cfg *config.Config, args []string) {
 		p = cfg.Credentials.Password
 	}
 	if u == "" || p == "" {
-		fmt.Fprintf(os.Stderr, "login requires --user/--pass or configured credentials\n")
-		emitError("invalid_input", "login requires --user/--pass or configured credentials")
+		fmt.Fprintf(os.Stderr, "login requires --user/--pass (or --pass-stdin / CONECTA_PASS) or configured credentials\n")
+		emitError("invalid_input", "login requires --user/--pass (or --pass-stdin / CONECTA_PASS) or configured credentials")
 		return
+	}
+
+	// Warn when the configured portal is plain http: credentials would cross
+	// the network in clear text. Login still proceeds (some test portals are
+	// http), but the user should know.
+	if strings.HasPrefix(strings.ToLower(cfg.Network.PortalURL), "http://") {
+		fmt.Fprintln(os.Stderr, "warning: portal_url uses http:// — credentials would be sent in clear; prefer https://")
 	}
 
 	portal := network.NewPortal(&network.NetworkConfig{
@@ -292,12 +311,13 @@ func cmdHotspot(cfg *config.Config, args []string) {
 
 	action := args[0]
 	cap := hotspot.NewCreateAP(&hotspot.Config{
-		SSID:       cfg.Hotspot.SSID,
-		Passphrase: cfg.Hotspot.Passphrase,
-		Channel:    cfg.Hotspot.Channel,
-		FreqBand:   cfg.Hotspot.FreqBand,
-		Method:     cfg.Hotspot.Method,
-		Gateway:    cfg.Hotspot.Gateway,
+		SSID:              cfg.Hotspot.SSID,
+		Passphrase:        cfg.Hotspot.Passphrase,
+		Channel:           cfg.Hotspot.Channel,
+		FreqBand:          cfg.Hotspot.FreqBand,
+		Method:            cfg.Hotspot.Method,
+		Gateway:           cfg.Hotspot.Gateway,
+		InternetInterface: cfg.Network.Interface,
 	})
 
 	switch action {
@@ -330,7 +350,11 @@ func cmdHotspot(cfg *config.Config, args []string) {
 		})
 
 	case "clients":
-		cm := hotspot.NewClientManager("ap0")
+		iface := hotspot.APInterface()
+		if iface == "" {
+			iface = "ap0"
+		}
+		cm := hotspot.NewClientManager(iface)
 		clients, err := cm.ListClients()
 		if err != nil {
 			emitOpError("hotspot clients", err)
@@ -396,7 +420,10 @@ func cmdNAT(cfg *config.Config, args []string) {
 		emitResult(map[string]any{"action": "setup", "configured": true})
 
 	case "cleanup":
-		n.Cleanup()
+		if err := n.Cleanup(); err != nil {
+			emitOpError("nat cleanup", err)
+			return
+		}
 		emitResult(map[string]any{"action": "cleanup", "cleaned": true})
 
 	case "status":

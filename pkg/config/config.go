@@ -9,11 +9,11 @@ import (
 
 // Config holds all application configuration
 type Config struct {
-	Network     NetworkConfig  `yaml:"network"`
-	Hotspot     HotspotConfig  `yaml:"hotspot"`
-	VPN         VPNConfig      `yaml:"vpn"`
-	UI          UIConfig       `yaml:"ui"`
-	Credentials Credentials    `yaml:"credentials"`
+	Network     NetworkConfig `yaml:"network"`
+	Hotspot     HotspotConfig `yaml:"hotspot"`
+	VPN         VPNConfig     `yaml:"vpn"`
+	UI          UIConfig      `yaml:"ui"`
+	Credentials Credentials   `yaml:"credentials"`
 }
 
 // Credentials holds login credentials
@@ -24,9 +24,9 @@ type Credentials struct {
 
 // NetworkConfig holds network settings
 type NetworkConfig struct {
-	Gateway    string `yaml:"gateway"`
-	Interface  string `yaml:"interface"`
-	PortalURL  string `yaml:"portal_url"`
+	Gateway   string `yaml:"gateway"`
+	Interface string `yaml:"interface"`
+	PortalURL string `yaml:"portal_url"`
 }
 
 // HotspotConfig holds hotspot settings

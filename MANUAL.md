@@ -77,12 +77,17 @@ Configuración única (requiere sudo de administrador):
 
 Instala `/etc/sudoers.d/conecta` a partir de `contrib/sudoers-conecta`:
 NOPASSWD root **solo** para los comandos exactos que ejecuta el CLI
-(`systemctl is-active|start|stop create_ap`, `tee /etc/create_ap.conf`,
-`killall hostapd dnsmasq`, `nmcli r wifi off|on`, `rfkill unblock wlan`,
-la ruta al portal `ip route add 10.180.0.0/16 via <gw> dev <iface>`).
-Sin esta configuración, `conecta-cli hotspot start|stop` y
-`conecta-cli nat setup` fallan con código de salida `4`. Las operaciones de
-solo lectura (`status`, clientes) y el login al portal no requieren privilegios.
+(`systemctl is-active|start|stop create_ap`, `tee /etc/create_ap.conf` +
+`chmod 0600`, `killall hostapd dnsmasq`, `nmcli r wifi off|on`,
+`rfkill unblock wlan`, la ruta al portal
+`ip route add 10.180.0.0/16 via <gw> dev <iface>`,
+`sysctl -w net.ipv4.ip_forward=1`, las reglas `iptables` de NAT/forward,
+`iw dev ... station del ... subtype 0xC`, y el fallback `wg-quick up|down wg0`).
+Sin esta configuración, `conecta-cli hotspot start|stop`, `nat setup` y el
+fallback `wg-quick` fallan con código de salida `4` sin tocar el host. Con la
+configuración instalada, esas acciones se ejecutan sin pedir contraseña. Las
+operaciones de solo lectura (`status`, clientes) y el login al portal no
+requieren privilegios.
 
 Propiedad de la instalación:
 
@@ -598,7 +603,7 @@ conecta/
 ├── pkg/
 │   ├── network/        # Lógica de red
 │   │   ├── portal.go   # Portal ETECSA
-│   │   ├── routing.go  # Rutas y NAT
+│   │   ├── route.go    # Ruta al portal con VPN
 │   │   ├── speed.go    # Test de velocidad
 │   │   └── types.go    # Tipos compartidos
 │   ├── hotspot/        # Lógica de hotspot

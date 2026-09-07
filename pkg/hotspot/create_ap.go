@@ -31,13 +31,13 @@ func (c *CreateAP) Start() (err error) {
 		return err
 	}
 	// Kill any stale processes
-	exec.Command("sudo", "killall", "hostapd").Run()
-	exec.Command("sudo", "killall", "dnsmasq").Run()
+	exec.Command("sudo", "-n", "killall", "hostapd").Run()
+	exec.Command("sudo", "-n", "killall", "dnsmasq").Run()
 
 	// Disable WiFi managed mode. From here on, any failure must restore the
 	// radio so it is never left switched off.
-	exec.Command("sudo", "nmcli", "r", "wifi", "off").Run()
-	exec.Command("sudo", "rfkill", "unblock", "wlan").Run()
+	exec.Command("sudo", "-n", "nmcli", "r", "wifi", "off").Run()
+	exec.Command("sudo", "-n", "rfkill", "unblock", "wlan").Run()
 	defer func() {
 		if err != nil {
 			restoreRadio()
@@ -50,7 +50,7 @@ func (c *CreateAP) Start() (err error) {
 	}
 
 	// Start service
-	cmd := exec.Command("sudo", "systemctl", "start", "create_ap")
+	cmd := exec.Command("sudo", "-n", "systemctl", "start", "create_ap")
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to start create_ap: %w", err)
 	}
@@ -63,7 +63,7 @@ func (c *CreateAP) Stop() error {
 	if err := checkAuthz(); err != nil {
 		return err
 	}
-	cmd := exec.Command("sudo", "systemctl", "stop", "create_ap")
+	cmd := exec.Command("sudo", "-n", "systemctl", "stop", "create_ap")
 	stopErr := cmd.Run()
 
 	// Always restore the radio, even when the stop failed, so WiFi is never
@@ -79,7 +79,7 @@ func (c *CreateAP) Stop() error {
 // restoreRadio re-enables the WiFi radio via nmcli. Errors are ignored:
 // it is best-effort recovery and must not mask the primary error.
 func restoreRadio() {
-	exec.Command("sudo", "nmcli", "r", "wifi", "on").Run()
+	exec.Command("sudo", "-n", "nmcli", "r", "wifi", "on").Run()
 }
 
 // Status returns the current hotspot status
@@ -175,13 +175,24 @@ ADDN_HOSTS=`,
 	// Write config through sudo tee: /etc/create_ap.conf is root-owned.
 	// The exact config bytes are fed via stdin, so sudo never sees them as
 	// arguments (no quoting issues, no shell interpretation).
-	cmd := exec.Command("sudo", "tee", "/etc/create_ap.conf")
+	cmd := exec.Command("sudo", "-n", "tee", "/etc/create_ap.conf")
 	cmd.Stdin = strings.NewReader(config)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		if msg := strings.TrimSpace(string(out)); msg != "" {
 			return fmt.Errorf("sudo tee /etc/create_ap.conf failed: %w (%s)", err, msg)
 		}
 		return fmt.Errorf("sudo tee /etc/create_ap.conf failed: %w", err)
+	}
+
+	// The file holds the hotspot WPA passphrase, so it must be owner-only.
+	// `sudo tee` creates it root-owned under the root umask (often 0644);
+	// pin it to 0600 so other local users cannot read the key (which users
+	// often reuse as the ETECSA password). Covered by the sudoers drop-in.
+	if out, err := exec.Command("sudo", "-n", "chmod", "0600", "/etc/create_ap.conf").CombinedOutput(); err != nil {
+		if msg := strings.TrimSpace(string(out)); msg != "" {
+			return fmt.Errorf("sudo chmod 0600 /etc/create_ap.conf failed: %w (%s)", err, msg)
+		}
+		return fmt.Errorf("sudo chmod 0600 /etc/create_ap.conf failed: %w", err)
 	}
 	return nil
 }

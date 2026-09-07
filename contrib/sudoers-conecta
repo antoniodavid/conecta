@@ -6,22 +6,48 @@
 # Grants NOPASSWD root ONLY for the exact commands conecta runs, each in the
 # exact argv form the CLI invokes (sudoers matches commands argument by
 # argument, so e.g. `/usr/bin/nmcli r wifi off` does NOT allow `nmcli` with
-# any other arguments). The portal-route and kick grants use per-argument
-# sudoers `*` wildcards for values that vary per host/config:
+# any other arguments). The portal-route, NAT and kick grants use per-argument
+# sudoers `*` wildcards for values that vary per host/config; each `*` matches
+# exactly one argument (never a whole shell command), so a value with spaces
+# or extra words cannot smuggle additional arguments past the fixed shape:
 # `/usr/bin/ip route add 10.180.0.0/16 via * dev *` allows only that exact
 # fixed command shape, and `/usr/bin/iw dev * station del * subtype 0xC`
 # allows kicking only with the fixed `iw station del ... subtype 0xC` shape.
+#
+# Keep this list in sync with the privileged commands pkg/ actually execs:
+#   - systemctl is-active|start|stop create_ap  (probe + hotspot lifecycle)
+#   - tee + chmod 0600 /etc/create_ap.conf       (config write, owner-only)
+#   - killall hostapd dnsmasq, nmcli r wifi off|on, rfkill unblock wlan
+#   - ip route add 10.180.0.0/16 via <gw> dev <iface>   (portal route w/ VPN)
+#   - sysctl -w net.ipv4.ip_forward=1                  (NAT pre-req)
+#   - iptables NAT/forward rule add|del + read-only list (hotspot NAT)
+#   - iw dev <iface> station del <mac> subtype 0xC      (hotspot kick)
+#   - wg-quick up|down wg0                              (VPN fallback)
+# All of these are invoked through `sudo -n` so a missing grant fails closed
+# instead of prompting for a password.
 Cmnd_Alias CONECTA_CMDS = \
     /usr/bin/systemctl is-active create_ap, \
     /usr/bin/systemctl start create_ap, \
     /usr/bin/systemctl stop create_ap, \
     /usr/bin/tee /etc/create_ap.conf, \
+    /usr/bin/chmod 0600 /etc/create_ap.conf, \
     /usr/bin/killall hostapd, \
     /usr/bin/killall dnsmasq, \
     /usr/bin/nmcli r wifi off, \
     /usr/bin/nmcli r wifi on, \
     /usr/bin/rfkill unblock wlan, \
     /usr/bin/ip route add 10.180.0.0/16 via * dev *, \
-    /usr/bin/iw dev * station del * subtype 0xC
+    /usr/bin/sysctl -w net.ipv4.ip_forward=1, \
+    /usr/bin/iptables -t nat -A POSTROUTING -s * -o * -j MASQUERADE, \
+    /usr/bin/iptables -t nat -D POSTROUTING -s * -o * -j MASQUERADE, \
+    /usr/bin/iptables -A FORWARD -i * -o * -j ACCEPT, \
+    /usr/bin/iptables -D FORWARD -i * -o * -j ACCEPT, \
+    /usr/bin/iptables -A FORWARD -i * -o * -m state --state RELATED,ESTABLISHED -j ACCEPT, \
+    /usr/bin/iptables -D FORWARD -i * -o * -m state --state RELATED,ESTABLISHED -j ACCEPT, \
+    /usr/bin/iptables -t nat -L POSTROUTING -n, \
+    /usr/bin/iptables -L FORWARD -n, \
+    /usr/bin/iw dev * station del * subtype 0xC, \
+    /usr/bin/wg-quick up wg0, \
+    /usr/bin/wg-quick down wg0
 
 __USER__ ALL=(root) NOPASSWD: CONECTA_CMDS

@@ -40,7 +40,9 @@ Uso: conecta-cli <comando> [opciones]
 ═══ OPCIONES ════════════════════════════════════════════════════
 
   --user <usuario>    Usuario ETECSA (opcional si está en config)
-  --pass <password>   Contraseña ETECSA (opcional si está en config)
+  --pass <password>   Contraseña ETECSA (opcional si está en config;
+                      preferí CONECTA_PASS env o --pass-stdin para no
+                      exponerla en argv/historial)
 
 ═══ EJEMPLOS ════════════════════════════════════════════════════
 
@@ -50,7 +52,10 @@ Uso: conecta-cli <comando> [opciones]
   # Login con credenciales del config
   conecta-cli login
 
-  # Login con credenciales explícitas
+  # Login sin exponer la contraseña en argv (lee de stdin)
+  cat ~/.config/conecta/secret.txt | conecta-cli login --pass-stdin
+
+  # Login con credenciales explícitas en argv (se ve en ps/historial)
   conecta-cli login --user TU_USUARIO --pass TU_CONTRASEÑA
 
   # Cerrar sesión

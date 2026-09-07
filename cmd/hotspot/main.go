@@ -52,13 +52,14 @@ func NewModel() Model {
 	return Model{
 		cfg: cfg,
 		hotspot: hotspot.NewCreateAP(&hotspot.Config{
-			SSID:       cfg.Hotspot.SSID,
-			Passphrase: cfg.Hotspot.Passphrase,
-			Channel:    cfg.Hotspot.Channel,
-			FreqBand:   cfg.Hotspot.FreqBand,
-			Method:     cfg.Hotspot.Method,
-			Subnet:     cfg.Hotspot.Subnet,
-			Gateway:    cfg.Hotspot.Gateway,
+			SSID:              cfg.Hotspot.SSID,
+			Passphrase:        cfg.Hotspot.Passphrase,
+			Channel:           cfg.Hotspot.Channel,
+			FreqBand:          cfg.Hotspot.FreqBand,
+			Method:            cfg.Hotspot.Method,
+			Subnet:            cfg.Hotspot.Subnet,
+			Gateway:           cfg.Hotspot.Gateway,
+			InternetInterface: cfg.Network.Interface,
 		}),
 	}
 }
@@ -105,7 +106,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) refresh() Model {
 	s, _ := m.hotspot.Status()
 	m.status = s
-	cm := hotspot.NewClientManager("ap0")
+	iface := hotspot.APInterface()
+	if iface == "" {
+		iface = "ap0"
+	}
+	cm := hotspot.NewClientManager(iface)
 	m.clients, _ = cm.ListClients()
 	m.updatedAt = time.Now()
 	return m

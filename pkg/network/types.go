@@ -41,23 +41,23 @@ type Connection struct {
 
 // SpeedResult holds speed test results
 type SpeedResult struct {
-	DownloadMbps float64
-	UploadMbps   float64
-	LatencyMs    float64
+	DownloadMbps  float64
+	UploadMbps    float64
+	LatencyMs     float64
 	BytesDownload uint64
-	Duration     time.Duration
-	ServerURL    string
-	Error        error
+	Duration      time.Duration
+	ServerURL     string
+	Error         error
 }
 
 // NetworkConfig holds network configuration
 type NetworkConfig struct {
-	Gateway      string        `yaml:"gateway"`
-	Interface    string        `yaml:"interface"`
-	PortalURL    string        `yaml:"portal_url"`
-	Timeout      time.Duration `yaml:"timeout"`
-	RetryCount   int           `yaml:"retry_count"`
-	RetryDelay   time.Duration `yaml:"retry_delay"`
+	Gateway    string        `yaml:"gateway"`
+	Interface  string        `yaml:"interface"`
+	PortalURL  string        `yaml:"portal_url"`
+	Timeout    time.Duration `yaml:"timeout"`
+	RetryCount int           `yaml:"retry_count"`
+	RetryDelay time.Duration `yaml:"retry_delay"`
 }
 
 // DefaultConfig returns default network configuration

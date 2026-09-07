@@ -310,7 +310,7 @@ func (m *Manager) ConnectTo(name string) error {
 	if name != m.name {
 		return fmt.Errorf("failed to connect VPN: %s", string(out))
 	}
-	cmd = exec.Command("sudo", "wg-quick", "up", m.iface)
+	cmd = exec.Command("sudo", "-n", "wg-quick", "up", m.iface)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to connect VPN: %s", string(out))
@@ -379,7 +379,7 @@ func (m *Manager) DisconnectTo(name string) error {
 	if name != m.name {
 		return fmt.Errorf("failed to deactivate VPN profile %q: %s: %v", name, strings.TrimSpace(string(out)), err)
 	}
-	out, err = exec.Command("sudo", "wg-quick", "down", m.iface).CombinedOutput()
+	out, err = exec.Command("sudo", "-n", "wg-quick", "down", m.iface).CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to disconnect VPN: %s", string(out))
 	}

@@ -99,7 +99,7 @@ func TestEnsurePortalRouteAddsWithExactArgv(t *testing.T) {
 		t.Fatalf("EnsurePortalRoute error = %v, want nil", err)
 	}
 	lines := routeLogLines(t, log)
-	if countContains(lines, "sudo ip route add 10.180.0.0/16 via 192.168.1.1 dev enp3s0") != 1 {
+	if countContains(lines, "sudo -n ip route add 10.180.0.0/16 via 192.168.1.1 dev enp3s0") != 1 {
 		t.Fatalf("expected one fixed-argv sudo add, log = %v", lines)
 	}
 	if countContains(lines, "ip route show") != 1 {
@@ -132,7 +132,7 @@ func TestEnsurePortalRouteAddFailsStillAbsent(t *testing.T) {
 		}
 	}
 	lines := routeLogLines(t, log)
-	if countContains(lines, "sudo ip route add") != 1 {
+	if countContains(lines, "sudo -n ip route add") != 1 {
 		t.Fatalf("expected exactly one sudo add attempt, log = %v", lines)
 	}
 }

@@ -32,18 +32,18 @@ func TestDefaultConfig(t *testing.T) {
 
 func TestClientManager_NewClientManager(t *testing.T) {
 	tests := []struct {
-		name     string
-		iface    string
+		name      string
+		iface     string
 		wantIface string
 	}{
 		{
-			name:     "uses provided interface",
-			iface:    "wlan0",
+			name:      "uses provided interface",
+			iface:     "wlan0",
 			wantIface: "wlan0",
 		},
 		{
-			name:     "defaults to ap0",
-			iface:    "",
+			name:      "defaults to ap0",
+			iface:     "",
 			wantIface: "ap0",
 		},
 	}

@@ -38,11 +38,11 @@ func writePATHStub(t *testing.T, name, script string) {
 
 func TestParseLeaseLine(t *testing.T) {
 	tests := []struct {
-		name    string
-		line    string
-		wantOK  bool
-		wantIP  string
-		wantMAC string
+		name     string
+		line     string
+		wantOK   bool
+		wantIP   string
+		wantMAC  string
 		wantName string
 	}{
 		{"real lease line", "1723030097 22:df:51:de:e8:40 192.168.12.129 Xiaomi-11-Lite-5G-NE", true, "192.168.12.129", "22:DF:51:DE:E8:40", "Xiaomi-11-Lite-5G-NE"},
@@ -173,7 +173,7 @@ func TestKickClient(t *testing.T) {
 			t.Fatalf("KickClient error = %v", err)
 		}
 		got, _ := os.ReadFile(logPath)
-		want := "iw dev ap0 station del " + mac + " subtype 0xC"
+		want := "-n iw dev ap0 station del " + mac + " subtype 0xC"
 		if string(got) != want {
 			t.Fatalf("sudo argv = %q, want %q", got, want)
 		}

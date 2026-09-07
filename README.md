@@ -91,9 +91,11 @@ conecta/
 │   ├── conecta/        # TUI principal
 │   ├── hotspot/        # TUI de hotspot
 │   └── cli/            # CLI
-├── bin/                # Binarios compilados
+├── bin/                # Binarios compilados (no versionados)
+├── omarchy-plugin/     # Plugin para Omarchy (QML + adapters)
+├── openspec/           # Especificaciones (SDD)
 ├── MANUAL.md           # Documentación completa
-└── config.yaml         # Config por defecto
+└── contrib/            # sudoers drop-in + unit create_ap
 ```
 
 ## Desarrollo

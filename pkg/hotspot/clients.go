@@ -245,7 +245,7 @@ func KickClient(iface, mac string) error {
 			iface = "ap0"
 		}
 	}
-	out, err := exec.Command("sudo", "iw", "dev", iface, "station", "del", mac, "subtype", "0xC").CombinedOutput()
+	out, err := exec.Command("sudo", "-n", "iw", "dev", iface, "station", "del", mac, "subtype", "0xC").CombinedOutput()
 	if err != nil {
 		if msg := strings.TrimSpace(string(out)); msg != "" {
 			return fmt.Errorf("kick %s from %s failed: %w (%s)", mac, iface, err, msg)

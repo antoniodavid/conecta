@@ -55,35 +55,36 @@ type Model struct {
 	lastCheck time.Time
 
 	// Hotspot state
-	hotspot      *hotspot.CreateAP
+	hotspot       *hotspot.CreateAP
 	hotspotStatus *hotspot.Status
-	clients      []hotspot.Client
+	clients       []hotspot.Client
 
 	// VPN state
 	vpn          *vpn.Manager
 	vpnConnected bool
 
 	// UI state
-	logs   []string
+	logs      []string
 	statusMsg string
 	statusExp time.Time
 }
 
 func NewModel(cfg *config.Config) Model {
 	m := Model{
-		cfg:     cfg,
-		portal:  network.NewPortal(&network.NetworkConfig{
+		cfg: cfg,
+		portal: network.NewPortal(&network.NetworkConfig{
 			Gateway:   cfg.Network.Gateway,
 			Interface: cfg.Network.Interface,
 			PortalURL: cfg.Network.PortalURL,
 		}),
 		hotspot: hotspot.NewCreateAP(&hotspot.Config{
-			SSID:       cfg.Hotspot.SSID,
-			Passphrase: cfg.Hotspot.Passphrase,
-			Channel:    cfg.Hotspot.Channel,
-			FreqBand:   cfg.Hotspot.FreqBand,
-			Method:     cfg.Hotspot.Method,
-			Gateway:    cfg.Hotspot.Gateway,
+			SSID:              cfg.Hotspot.SSID,
+			Passphrase:        cfg.Hotspot.Passphrase,
+			Channel:           cfg.Hotspot.Channel,
+			FreqBand:          cfg.Hotspot.FreqBand,
+			Method:            cfg.Hotspot.Method,
+			Gateway:           cfg.Hotspot.Gateway,
+			InternetInterface: cfg.Network.Interface,
 		}),
 		vpn: vpn.NewManager(cfg.VPN.Interface, cfg.VPN.Name),
 	}

@@ -31,7 +31,7 @@ func EnsurePortalRoute(gateway, iface string) error {
 	if present() {
 		return nil // already routed; nothing to do
 	}
-	cmd := exec.Command("sudo", "ip", "route", "add", PortalNet, "via", gateway, "dev", iface)
+	cmd := exec.Command("sudo", "-n", "ip", "route", "add", PortalNet, "via", gateway, "dev", iface)
 	if out, err := cmd.CombinedOutput(); err != nil {
 		if present() {
 			return nil // lost the race: the route is up despite the failed add

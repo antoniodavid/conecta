@@ -20,24 +20,24 @@ func TestParseWiFiInterfaces(t *testing.T) {
 			want:  []string{"wlo1"},
 		},
 		{
-			name: "skips P2P-device Interface block",
+			name:  "skips P2P-device Interface block",
 			input: "phy#0\n\tInterface p2p-dev-wlo1\n\t\tifindex 4\n\t\twdev 0xe\n\t\ttype P2P-device\n\tInterface wlo1\n\t\tifindex 3\n\t\twdev 0x1\n\t\ttype managed\n",
-			want: []string{"wlo1"},
+			want:  []string{"wlo1"},
 		},
 		{
-			name: "only P2P-device yields nothing",
+			name:  "only P2P-device yields nothing",
 			input: "phy#0\n\tInterface p2p-dev-wlo1\n\t\tifindex 4\n\t\ttype P2P-device\n",
-			want: nil,
+			want:  nil,
 		},
 		{
-			name: "accepts managed and type-less blocks",
+			name:  "accepts managed and type-less blocks",
 			input: "phy#0\n\tInterface wlan0\n\t\tifindex 3\n\t\ttype managed\nphy#1\n\tInterface ap0\n\t\tifindex 4\n",
-			want: []string{"wlan0", "ap0"},
+			want:  []string{"wlan0", "ap0"},
 		},
 		{
-			name: "accepts non-P2P types",
+			name:  "accepts non-P2P types",
 			input: "phy#0\n\tInterface wlan0\n\t\ttype AP\n\tInterface wlan1\n\t\ttype monitor\n",
-			want: []string{"wlan0", "wlan1"},
+			want:  []string{"wlan0", "wlan1"},
 		},
 		{
 			name:  "empty yields nothing",

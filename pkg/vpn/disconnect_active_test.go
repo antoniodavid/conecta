@@ -129,7 +129,7 @@ func TestDisconnectToDownFailConfiguredFallsBack(t *testing.T) {
 	if !containsLog(lines, "nmcli con down USA") {
 		t.Fatalf("expected attempted nmcli down of USA, log = %v", lines)
 	}
-	if !containsLog(lines, "sudo wg-quick down wg0") {
+	if !containsLog(lines, "sudo -n wg-quick down wg0") {
 		t.Fatalf("expected wg-quick fallback for configured profile, log = %v", lines)
 	}
 }
