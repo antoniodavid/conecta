@@ -154,6 +154,7 @@ Panel {
     if (root.status === null || root.status === undefined)
       return "No data"
     var k = root.connKey()
+    if (root.vpnConnected()) return "VPN"
     if (k === "connected") return "Online"
     if (k === "needs auth") return "Login needed"
     if (k === "no portal") return "No portal"
@@ -162,6 +163,7 @@ Panel {
 
   function connPillFg() {
     var k = root.connKey()
+    if (root.vpnConnected()) return root.mint
     if (k === "connected") return root.mint
     if (k === "needs auth") return root.amber
     if (k === "" || k === "no portal") return root.stationFaint
@@ -170,6 +172,7 @@ Panel {
 
   function connPillBg() {
     var k = root.connKey()
+    if (root.vpnConnected()) return root.mintWash
     if (k === "connected") return root.mintWash
     if (k === "needs auth") return root.amberWash
     if (k === "" || k === "no portal") return root.stationEdge
@@ -657,7 +660,7 @@ Panel {
 
             Text {
               width: parent.width
-              text: root.connKey() === "needs auth" ? "Sign in through the portal to enable traffic." : (root.connKey() === "connected" ? "Portal session is live." : "Portal actions unlock once the link is up.")
+              text: root.vpnConnected() && root.connKey() !== "connected" ? "Portal is unreachable while the VPN is up — disconnect the VPN to reach ETECSA." : (root.connKey() === "needs auth" ? "Sign in through the portal to enable traffic." : (root.connKey() === "connected" ? "Portal session is live." : "Portal actions unlock once the link is up."))
               font.family: root.fontFamily
               font.pixelSize: 11
               color: root.stationFaint
