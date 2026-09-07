@@ -201,6 +201,33 @@ func TestVerifyLogin(t *testing.T) {
 	}
 }
 
+func TestPortalVerdict(t *testing.T) {
+	tests := []struct {
+		name       string
+		pageStatus PortalStatus
+		pageErr    error
+		online     bool
+		want       PortalStatus
+	}{
+		{name: "reachable session page online", pageStatus: PortalConnected, online: true, want: PortalConnected},
+		{name: "reachable session page offline", pageStatus: PortalConnected, online: false, want: PortalConnected},
+		{name: "reachable login page online is connected", pageStatus: PortalNeedsAuth, online: true, want: PortalConnected},
+		{name: "reachable login page offline is needs auth", pageStatus: PortalNeedsAuth, online: false, want: PortalNeedsAuth},
+		{name: "reachable unrecognized page online is connected", pageStatus: PortalNone, online: true, want: PortalConnected},
+		{name: "reachable unrecognized page offline is no portal", pageStatus: PortalNone, online: false, want: PortalNone},
+		{name: "unreachable portal online is no portal", pageStatus: PortalNone, pageErr: errors.New("boom"), online: true, want: PortalNone},
+		{name: "unreachable portal offline is error", pageStatus: PortalNone, pageErr: errors.New("boom"), online: false, want: PortalError},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := portalVerdict(tt.pageStatus, tt.pageErr, tt.online); got != tt.want {
+				t.Errorf("portalVerdict(%v, %v, %v) = %v, want %v", tt.pageStatus, tt.pageErr, tt.online, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoginPostVerdict(t *testing.T) {
 	tests := []struct {
 		name     string

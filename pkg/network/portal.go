@@ -91,11 +91,12 @@ func NewPortal(config *NetworkConfig) *Portal {
 }
 
 // CheckPortal checks the status of the captive portal. The portal page is
-// the single source of truth and is probed first with a short timeout:
-//   - page reachable  -> classifyPortalPage (connected / needs auth / none)
-//   - page unreachable but real internet works -> PortalNone: online on a
-//     non-ETECSA network, the portal is simply not there
-//   - page unreachable and no internet -> PortalError
+// probed first with a short timeout, and the verdict is decided by
+// portalVerdict: the page alone is not the whole truth, because ETECSA
+// binds the session to the account/IP rather than to a persistent client
+// cookie — a fresh (cookie-less) client can receive the login form while
+// the session is live. Real internet connectivity resolves those ambiguous
+// cases; it is probed only when the page did not already prove a session.
 func (p *Portal) CheckPortal() (*Connection, error) {
 	conn := &Connection{
 		Gateway:   p.config.Gateway,
@@ -105,21 +106,59 @@ func (p *Portal) CheckPortal() (*Connection, error) {
 	}
 
 	page, err := p.fetchPortalPage()
-	if err == nil {
-		conn.Status = classifyPortalPage(page)
-		return conn, nil
+	if err != nil {
+		conn.Status = portalVerdict(PortalNone, err, p.hasInternetConnectivity())
+		if conn.Status == PortalError {
+			conn.LastError = err
+		}
+		return conn, nil // Return without error, status indicates failure
 	}
 
-	// Portal unreachable. Real internet means "no portal" (the early
-	// connectivity shortcut never implied a portal session); only a real
-	// connectivity failure is an error.
-	if p.hasInternetConnectivity() {
-		conn.Status = PortalNone
-		return conn, nil
+	status := classifyPortalPage(page)
+	// Session markers are conclusive; only login-form and unrecognized pages
+	// need the connectivity tie-breaker (which costs up to ~6s, so skip it
+	// on the fast path).
+	online := status != PortalConnected && p.hasInternetConnectivity()
+	conn.Status = portalVerdict(status, nil, online)
+	return conn, nil
+}
+
+// portalVerdict is the pure CheckPortal decision table. pageStatus is the
+// classified portal page and is meaningful only when pageErr == nil (a nil
+// pageErr means the portal GET succeeded); online reports whether real
+// internet works. The caller keeps the fetch error when PortalError wins.
+//
+//	GET success, session markers      -> connected (session page is proof)
+//	GET success, login form,  online  -> connected (account/IP-bound
+//	                                     session; fresh client lacks cookie)
+//	GET success, login form,  offline -> needs auth
+//	GET success, unrecognized, online -> connected (reachable portal on a
+//	                                     live ETECSA session)
+//	GET success, unrecognized, offline -> no portal
+//	GET failure, online               -> no portal (not an ETECSA captive
+//	                                     network; portal simply not there)
+//	GET failure, offline              -> PortalError
+func portalVerdict(pageStatus PortalStatus, pageErr error, online bool) PortalStatus {
+	if pageErr != nil {
+		if online {
+			return PortalNone
+		}
+		return PortalError
 	}
-	conn.Status = PortalError
-	conn.LastError = err
-	return conn, nil // Return without error, status indicates failure
+	switch pageStatus {
+	case PortalConnected:
+		return PortalConnected
+	case PortalNeedsAuth:
+		if online {
+			return PortalConnected
+		}
+		return PortalNeedsAuth
+	default: // PortalNone (classifyPortalPage never yields PortalError)
+		if online {
+			return PortalConnected
+		}
+		return PortalNone
+	}
 }
 
 // hasInternetConnectivity checks if we have real internet access
