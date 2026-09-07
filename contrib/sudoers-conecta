@@ -42,8 +42,8 @@ Cmnd_Alias CONECTA_CMDS = \
     /usr/bin/iptables -t nat -D POSTROUTING -s * -o * -j MASQUERADE, \
     /usr/bin/iptables -A FORWARD -i * -o * -j ACCEPT, \
     /usr/bin/iptables -D FORWARD -i * -o * -j ACCEPT, \
-    /usr/bin/iptables -A FORWARD -i * -o * -m state --state "RELATED,ESTABLISHED" -j ACCEPT, \
-    /usr/bin/iptables -D FORWARD -i * -o * -m state --state "RELATED,ESTABLISHED" -j ACCEPT, \
+    /usr/bin/iptables -A FORWARD -i * -o * -m state --state RELATED\,ESTABLISHED -j ACCEPT, \
+    /usr/bin/iptables -D FORWARD -i * -o * -m state --state RELATED\,ESTABLISHED -j ACCEPT, \
     /usr/bin/iptables -t nat -L POSTROUTING -n, \
     /usr/bin/iptables -L FORWARD -n, \
     /usr/bin/iw dev * station del * subtype 0xC, \
