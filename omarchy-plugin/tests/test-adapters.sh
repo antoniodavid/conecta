@@ -127,6 +127,37 @@ else
   echo "PASS: status adapter forwards connection.username"
 fi
 
+# 6c. status adapter forwards the new values verbatim: connection.status
+# "no portal"/"needs auth" and the hotspot ap_interface.
+cat > "$TMP/stub-no-portal" <<'EOF'
+#!/bin/bash
+if [ "${1:-}" = "hotspot" ]; then
+  echo '{"ok":true,"data":{"active":true,"ssid":"RUBAN_WIFI","clients":2,"ap_interface":"ap0"}}'
+  exit 0
+fi
+echo '{"ok":true,"data":{"status":"no portal","gateway":"g","interface":"i","wifi":{"ssid":"HOME","signal":80},"username":""}}'
+exit 0
+EOF
+chmod +x "$TMP/stub-no-portal"
+out=$(CONNECTA_CLI="$TMP/stub-no-portal" bash "$BIN/omarchy-conecta-status" 2>/dev/null); rc=$?
+echo "$out" | jq -e '.connection.status == "no portal" and .hotspot.ap_interface == "ap0"' >/dev/null 2>&1 || { echo "FAIL: status adapter must forward no portal + ap_interface: [$out]"; FAIL=1; }
+[ "$rc" -eq 0 ] || { echo "FAIL: status no-portal exit=$rc want 0"; FAIL=1; }
+
+cat > "$TMP/stub-needs-auth" <<'EOF'
+#!/bin/bash
+if [ "${1:-}" = "hotspot" ]; then
+  echo '{"ok":true,"data":{"active":false,"ssid":"","clients":0}}'
+  exit 0
+fi
+echo '{"ok":true,"data":{"status":"needs auth","gateway":"g","interface":"i","wifi":{"ssid":"ETECSA","signal":60},"username":"alice"}}'
+exit 0
+EOF
+chmod +x "$TMP/stub-needs-auth"
+out=$(CONNECTA_CLI="$TMP/stub-needs-auth" bash "$BIN/omarchy-conecta-status" 2>/dev/null); rc=$?
+echo "$out" | jq -e '.connection.status == "needs auth"' >/dev/null 2>&1 || { echo "FAIL: status adapter must forward needs auth: [$out]"; FAIL=1; }
+[ "$rc" -eq 0 ] || { echo "FAIL: status needs-auth exit=$rc want 0"; FAIL=1; }
+echo "PASS: status adapter forwards no portal, needs auth, ap_interface"
+
 # 7. VPN list: stub profiles JSON must pass through verbatim with exit 0.
 cat > "$TMP/stub-vpn-list" <<'EOF'
 #!/bin/bash

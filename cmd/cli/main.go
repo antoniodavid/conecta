@@ -321,10 +321,11 @@ func cmdHotspot(cfg *config.Config, args []string) {
 			return
 		}
 		emitResult(map[string]any{
-			"active":  status.Active,
-			"ssid":    status.SSID,
-			"ip":      status.IP,
-			"clients": status.Clients,
+			"active":       status.Active,
+			"ssid":         status.SSID,
+			"ip":           status.IP,
+			"clients":      status.Clients,
+			"ap_interface": status.APInterface,
 		})
 
 	case "clients":

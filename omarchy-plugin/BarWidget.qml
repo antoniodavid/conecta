@@ -38,7 +38,7 @@ BarWidget {
   // ─── Icon functions (nerd font like network plugin) ─────────────
   function getStatusIcon() {
     if (!isOn) return "󰤮"  // Disconnected
-    if ((status && status.connection && status.connection.status) === "needs_auth") return "󰤯"  // Needs auth
+    if ((status && status.connection && status.connection.status) === "needs auth") return "󰤯"  // Needs auth
     if ((status && status.vpn && status.vpn.connected)) return "󰲝"  // VPN connected
     if ((status && status.hotspot && status.hotspot.active)) return "󰤨"  // Hotspot active
     // WiFi connected - use signal strength
@@ -86,7 +86,7 @@ BarWidget {
     }
     root.status = doc;
     root.isOn = (doc.connection && doc.connection.status) === "connected" ||
-                (doc.connection && doc.connection.status) === "needs_auth";
+                (doc.connection && doc.connection.status) === "needs auth";
   }
 
   function refreshStatus() {

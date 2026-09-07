@@ -2,13 +2,13 @@ package hotspot
 
 // Config holds hotspot configuration
 type Config struct {
-	SSID       string
-	Passphrase string
-	Channel    string
-	FreqBand   string
-	Method     string
-	Subnet     string
-	Gateway    string
+	SSID              string
+	Passphrase        string
+	Channel           string
+	FreqBand          string
+	Method            string
+	Subnet            string
+	Gateway           string
 	InternetInterface string
 }
 
@@ -27,13 +27,14 @@ func DefaultConfig() *Config {
 
 // Status represents the current hotspot status
 type Status struct {
-	Active   bool
-	SSID     string
-	IP       string
-	Channel  int
-	FreqBand string
-	Method   string
-	Hostapd  bool
-	Dnsmasq  bool
-	Clients  int
+	Active      bool
+	SSID        string
+	IP          string
+	Channel     int
+	FreqBand    string
+	Method      string
+	Hostapd     bool
+	Dnsmasq     bool
+	Clients     int
+	APInterface string // live interface in AP mode ("" when none found)
 }

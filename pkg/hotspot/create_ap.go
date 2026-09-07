@@ -97,7 +97,9 @@ func (c *CreateAP) Status() (*Status, error) {
 	// Read config
 	c.readConfig(s)
 
-	// Count clients
+	// Count clients always from the live AP interface (never a hardcoded
+	// iface): the create_ap unit can be inactive while the AP iface persists.
+	s.APInterface = apInterface()
 	s.Clients = c.countClients()
 
 	return s, nil
@@ -205,8 +207,55 @@ func (c *CreateAP) readConfig(s *Status) {
 	}
 }
 
+// apInterface returns the name of the interface currently in AP mode via
+// `iw dev`; empty when none is found (callers then fall back to "ap0").
+func apInterface() string {
+	out, err := exec.Command("iw", "dev").Output()
+	if err != nil {
+		return ""
+	}
+	return parseAPInterface(string(out))
+}
+
+// parseAPInterface parses `iw dev` output for the interface whose following
+// type line is "AP", mirroring the network package's same-line Interface +
+// following-type tracking. Unnamed/P2P-device blocks are skipped; no AP
+// interface yields "". Names are kept verbatim.
+func parseAPInterface(output string) string {
+	var current string
+	for _, line := range strings.Split(output, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "phy#") || strings.HasPrefix(trimmed, "Unnamed") {
+			// A new device block starts: later type lines do not belong to
+			// the previous interface.
+			current = ""
+			continue
+		}
+		if strings.HasPrefix(trimmed, "Interface ") {
+			fields := strings.Fields(trimmed)
+			if len(fields) >= 2 {
+				current = strings.Join(fields[1:], " ")
+			} else {
+				current = ""
+			}
+			continue
+		}
+		if current != "" && strings.HasPrefix(trimmed, "type ") {
+			typ := strings.ToLower(strings.TrimSpace(strings.TrimPrefix(trimmed, "type ")))
+			if typ == "ap" {
+				return current
+			}
+		}
+	}
+	return ""
+}
+
 func (c *CreateAP) countClients() int {
-	out, err := exec.Command("iw", "dev", "ap0", "station", "dump").Output()
+	iface := apInterface()
+	if iface == "" {
+		iface = "ap0"
+	}
+	out, err := exec.Command("iw", "dev", iface, "station", "dump").Output()
 	if err != nil {
 		return 0
 	}

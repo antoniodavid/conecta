@@ -55,7 +55,8 @@ merged=$(jq -n -c \
     hotspot: {
       active: ($hs.data.active // false),
       ssid: ($hs.data.ssid // ""),
-      clients: ($hs.data.clients // 0)
+      clients: ($hs.data.clients // 0),
+      ap_interface: ($hs.data.ap_interface // "")
     },
     vpn: {
       connected: ($vn.data.connected // false),

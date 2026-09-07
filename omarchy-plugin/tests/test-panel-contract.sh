@@ -144,6 +144,12 @@ grep -Fq '"User"' "$ROOT/Panel.qml" \
   && pass "Panel contains User row marker" \
   || fail "Panel must contain a \"User\" row label"
 
+# 8c. Panel maps the "no portal" connection status to a neutral pill
+# (not a red failure state).
+grep -q '"No portal"' "$ROOT/Panel.qml" \
+  && pass "Panel maps no portal to a neutral pill" \
+  || fail "Panel must map no portal to a neutral pill"
+
 # 9. BarWidget+Loader architecture: BarWidget root, Loader into Panel.qml,
 # single IpcHandler on conecta.network with toggle, injectPanel wiring
 # anchorItem/hostWidget plus live status/isOn, status poll ownership.

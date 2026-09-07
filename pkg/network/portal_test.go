@@ -1,6 +1,7 @@
 package network
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -88,27 +89,54 @@ func TestDefaultConfig(t *testing.T) {
 	}
 }
 
-func TestLogoutSucceeded(t *testing.T) {
+func TestClassifyPortalPage(t *testing.T) {
 	tests := []struct {
 		name string
-		code int
 		html string
-		want bool
+		want PortalStatus
 	}{
-		{name: "200 markerless is success", code: 200, html: "", want: true},
-		{name: "204 is success", code: 204, html: "", want: true},
-		{name: "302 redirect is success", code: 302, html: "", want: true},
-		{name: "301 redirect is success", code: 301, html: "", want: true},
-		{name: "500 is failure", code: 500, html: "", want: false},
-		{name: "404 is failure", code: 404, html: "", want: false},
-		{name: "200 with LoginServlet marker is success", code: 200, html: `<form action="LoginServlet">`, want: true},
-		{name: "302 with marker is success", code: 302, html: "Bienvenido", want: true},
+		{name: "session marker ya esta conectado", html: "<div>usted ya está conectado</div>", want: PortalConnected},
+		{name: "session marker ya conectado", html: "usuario ya conectado", want: PortalConnected},
+		{name: "login marker LoginServlet", html: `<form action="LoginServlet">`, want: PortalNeedsAuth},
+		{name: "login marker Bienvenido", html: "<h1>Bienvenido</h1>", want: PortalNeedsAuth},
+		{name: "empty page", html: "", want: PortalNone},
+		{name: "unknown page", html: "<html><body>gateway notice</body></html>", want: PortalNone},
+		{name: "mixed session and login markers", html: `ya está conectado <form action="LoginServlet">`, want: PortalConnected},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := logoutSucceeded(tt.code, tt.html); got != tt.want {
-				t.Errorf("logoutSucceeded(%d, %q) = %v, want %v", tt.code, tt.html, got, tt.want)
+			if got := classifyPortalPage(tt.html); got != tt.want {
+				t.Errorf("classifyPortalPage(%q) = %v, want %v", tt.html, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLogoutVerdict(t *testing.T) {
+	tests := []struct {
+		name    string
+		page    string
+		wantErr string // "" means success
+	}{
+		{name: "login page after logout is success", page: `<form action="LoginServlet">Bienvenido</form>`, wantErr: ""},
+		{name: "login marker only is success", page: "LoginServlet", wantErr: ""},
+		{name: "session page means still active", page: "usted ya está conectado", wantErr: "portal session still active"},
+		{name: "empty page fails closed", page: "", wantErr: "cannot verify logout"},
+		{name: "unknown page fails closed", page: "<html>proxy notice</html>", wantErr: "cannot verify logout"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := logoutVerdict(tt.page)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("logoutVerdict(%q) = %v, want success", tt.page, err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("logoutVerdict(%q) error = %v, want containing %q", tt.page, err, tt.wantErr)
 			}
 		})
 	}

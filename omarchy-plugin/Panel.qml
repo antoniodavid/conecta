@@ -79,7 +79,7 @@ Panel {
 
   function getStatusText() {
     if (!isOn) return "Disconnected"
-    if ((status && status.connection && status.connection.status) === "needs_auth") return "Auth needed"
+    if ((status && status.connection && status.connection.status) === "needs auth") return "Auth needed"
     if ((status && status.vpn && status.vpn.connected)) return "VPN"
     if ((status && status.hotspot && status.hotspot.active)) return "Hotspot"
     return (status && status.connection && status.connection.ssid) || "Connected"
@@ -134,15 +134,15 @@ Panel {
   function sigColor() {
     var k = root.connKey()
     if (k === "connected") return root.mint
-    if (k === "needs_auth") return root.amber
-    if (k === "") return root.stationFaint
+    if (k === "needs auth") return root.amber
+    if (k === "" || k === "no portal") return root.stationFaint
     return root.failure
   }
 
   function connLabel() {
     var k = root.connKey()
     if (k === "") return "Waiting for first read"
-    if (k === "needs_auth") return "Login required"
+    if (k === "needs auth") return "Login required"
     if (k === "connected") {
       var s = root.teleSsid()
       return s === "—" ? "Connected" : s
@@ -155,23 +155,24 @@ Panel {
       return "No data"
     var k = root.connKey()
     if (k === "connected") return "Online"
-    if (k === "needs_auth") return "Login needed"
+    if (k === "needs auth") return "Login needed"
+    if (k === "no portal") return "No portal"
     return "Offline"
   }
 
   function connPillFg() {
     var k = root.connKey()
     if (k === "connected") return root.mint
-    if (k === "needs_auth") return root.amber
-    if (k === "") return root.stationFaint
+    if (k === "needs auth") return root.amber
+    if (k === "" || k === "no portal") return root.stationFaint
     return root.failure
   }
 
   function connPillBg() {
     var k = root.connKey()
     if (k === "connected") return root.mintWash
-    if (k === "needs_auth") return root.amberWash
-    if (k === "") return root.stationEdge
+    if (k === "needs auth") return root.amberWash
+    if (k === "" || k === "no portal") return root.stationEdge
     return root.redWash
   }
 
@@ -656,7 +657,7 @@ Panel {
 
             Text {
               width: parent.width
-              text: root.connKey() === "needs_auth" ? "Sign in through the portal to enable traffic." : (root.connKey() === "connected" ? "Portal session is live." : "Portal actions unlock once the link is up.")
+              text: root.connKey() === "needs auth" ? "Sign in through the portal to enable traffic." : (root.connKey() === "connected" ? "Portal session is live." : "Portal actions unlock once the link is up.")
               font.family: root.fontFamily
               font.pixelSize: 11
               color: root.stationFaint
@@ -668,7 +669,7 @@ Panel {
             Row {
               width: parent.width
               spacing: 8
-              visible: (root.connKey() === "connected" || root.connKey() === "needs_auth") && root.connUser() !== ""
+              visible: (root.connKey() === "connected" || root.connKey() === "needs auth") && root.connUser() !== ""
 
               Text {
                 text: "User"
@@ -707,7 +708,7 @@ Panel {
                 }
 
                 Text {
-                  text: loginProcess.running ? (root.loginAction === "logout" ? "Logging out…" : "Logging in…") : (root.connKey() === "connected" ? "Log out of portal" : (root.connKey() === "needs_auth" ? "Log in to portal" : "Refresh status"))
+                  text: loginProcess.running ? (root.loginAction === "logout" ? "Logging out…" : "Logging in…") : (root.connKey() === "connected" ? "Log out of portal" : (root.connKey() === "needs auth" ? "Log in to portal" : "Refresh status"))
                   font.family: root.fontFamily
                   font.pixelSize: 12
                   font.bold: true
@@ -721,7 +722,7 @@ Panel {
                 enabled: !loginProcess.running
                 onClicked: {
                   if (root.connKey() === "connected") root.runLogin("logout")
-                  else if (root.connKey() === "needs_auth") root.runLogin("login")
+                  else if (root.connKey() === "needs auth") root.runLogin("login")
                   else root.requestRefresh()
                 }
               }
