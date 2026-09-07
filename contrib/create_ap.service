@@ -1,0 +1,19 @@
+[Unit]
+Description=Create AP WiFi Hotspot (shared over VPN wg0)
+After=network.target
+
+[Service]
+Type=simple
+RemainAfterExit=yes
+ExecStartPre=-/usr/bin/bash -c 'nmcli r wifi off; rfkill unblock wlan; sleep 1'
+ExecStart=/usr/bin/create_ap --config /etc/create_ap.conf --daemon
+# NOTE: pkill uses -x (exact process name), NOT -f (full command line).
+# With -f, "pkill -f create_ap" matches this ExecStop's own shell and the
+# `sudo systemctl stop create_ap` invocation (its argv contains the word
+# "create_ap"), self-interrupting the stop and skipping the radio restore.
+ExecStop=/usr/bin/bash -c 'pkill -SIGINT -x create_ap 2>/dev/null; pkill -SIGINT -x hostapd 2>/dev/null; pkill -SIGINT -x dnsmasq 2>/dev/null; sleep 2; pkill -x create_ap 2>/dev/null; nmcli r wifi on'
+TimeoutStopSec=10
+Restart=no
+
+[Install]
+WantedBy=multi-user.target
