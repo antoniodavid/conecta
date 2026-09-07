@@ -18,6 +18,7 @@ cat > "$TMP/stub-cli" <<'EOF'
 mode="${STUB_MODE:-ok}"
 case "$mode" in
   ok)      echo '{"ok":true,"data":{"status":"connected"}}'; exit 0 ;;
+  user)    echo '{"ok":true,"data":{"status":"connected","username":"alice"}}'; exit 0 ;;
   invalid)  echo '{"ok":false,"error":{"code":"invalid_input","message":"bad"}}'; exit 2 ;;
   opfail)   echo '{"ok":false,"error":{"code":"op_failed","message":"boom"}}'; exit 3 ;;
   authz)    echo '{"ok":false,"error":{"code":"authz","message":"denied"}}'; exit 4 ;;
@@ -114,6 +115,17 @@ fi
 export STUB_MODE=opfail
 out=$(bash "$BIN/omarchy-conecta-status" 2>/dev/null); rc=$?
 echo "$out" | jq -e . >/dev/null 2>&1 || { echo "FAIL: status on CLI failure not valid JSON: [$out]"; FAIL=1; }
+
+# 6b. status adapter forwards the configured username into connection (jq marker).
+export STUB_MODE=user
+out=$(bash "$BIN/omarchy-conecta-status" 2>/dev/null); rc=$?
+echo "$out" | jq -e '.connection.username == "alice"' >/dev/null 2>&1 || { echo "FAIL: status adapter must forward username: [$out]"; FAIL=1; }
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL: status username exit=$rc want 0"
+  FAIL=1
+else
+  echo "PASS: status adapter forwards connection.username"
+fi
 
 # 7. VPN list: stub profiles JSON must pass through verbatim with exit 0.
 cat > "$TMP/stub-vpn-list" <<'EOF'

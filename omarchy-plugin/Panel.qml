@@ -94,6 +94,14 @@ Panel {
     return c.status
   }
 
+  function connUser() {
+    if (root.status === null || root.status === undefined) return ""
+    var c = root.status.connection
+    if (c === undefined || c === null) return ""
+    if (c.username === undefined || c.username === null) return ""
+    return c.username
+  }
+
   function hotspotActive() {
     if (root.status === null || root.status === undefined) return false
     var h = root.status.hotspot
@@ -653,6 +661,30 @@ Panel {
               font.pixelSize: 11
               color: root.stationFaint
               wrapMode: Text.Wrap
+            }
+
+            // User row: shown only when a portal session exists and a
+            // username is configured. Never renders "—" for an empty value.
+            Row {
+              width: parent.width
+              spacing: 8
+              visible: (root.connKey() === "connected" || root.connKey() === "needs_auth") && root.connUser() !== ""
+
+              Text {
+                text: "User"
+                font.family: root.fontFamily
+                font.pixelSize: 10
+                color: root.dim
+              }
+
+              Text {
+                text: root.connUser()
+                font.family: root.fontFamily
+                font.pixelSize: 13
+                color: root.foreground
+                elide: Text.ElideRight
+                width: parent.width - 40
+              }
             }
 
             // Contextual portal action: label says exactly what happens.

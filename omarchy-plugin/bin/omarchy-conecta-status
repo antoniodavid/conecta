@@ -49,7 +49,8 @@ merged=$(jq -n -c \
       gateway: ($st.data.gateway // ""),
       interface: ($st.data.interface // ""),
       ssid: ($st.data.wifi.ssid // ""),
-      signal: ($st.data.wifi.signal // 0)
+      signal: ($st.data.wifi.signal // 0),
+      username: ($st.data.username // "")
     },
     hotspot: {
       active: ($hs.data.active // false),

@@ -136,6 +136,14 @@ else
   pass "BarWidget has no ?? operator"
 fi
 
+# 8b. Connection card shows the logged-in user via the connUser helper.
+grep -q 'connUser' "$ROOT/Panel.qml" \
+  && pass "Panel contains connUser helper" \
+  || fail "Panel must contain connUser helper"
+grep -Fq '"User"' "$ROOT/Panel.qml" \
+  && pass "Panel contains User row marker" \
+  || fail "Panel must contain a \"User\" row label"
+
 # 9. BarWidget+Loader architecture: BarWidget root, Loader into Panel.qml,
 # single IpcHandler on conecta.network with toggle, injectPanel wiring
 # anchorItem/hostWidget plus live status/isOn, status poll ownership.

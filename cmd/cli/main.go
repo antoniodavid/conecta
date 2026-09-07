@@ -152,6 +152,7 @@ func cmdStatus(cfg *config.Config) {
 		"status":    conn.Status.String(),
 		"gateway":   conn.Gateway,
 		"interface": conn.Interface,
+		"username":  cfg.Credentials.Username,
 		"wifi": map[string]any{
 			"available":  snap.Available,
 			"ssid":       snap.SSID,
