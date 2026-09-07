@@ -2,6 +2,7 @@ package hotspot
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -213,8 +214,16 @@ func ParseIWInterfaces(output string) ([]string, error) {
 // It fails closed: denied or unavailable authz returns an authz error.
 // The probe runs an actually-allowed command: the scoped sudoers drop-in
 // (contrib/sudoers-conecta) does not permit plain `true`.
+// Exit code 3 means the unit is inactive but sudo itself succeeded, so the
+// probe is authorized; any other failure (1/126/127) means sudo denied or
+// is unavailable.
 func checkAuthz() error {
-	if err := exec.Command("sudo", "-n", "systemctl", "is-active", "create_ap").Run(); err != nil {
+	_, err := exec.Command("sudo", "-n", "systemctl", "is-active", "create_ap").Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && exitErr.ExitCode() == 3 {
+			return nil
+		}
 		return fmt.Errorf("authz: privileged action denied or unavailable (sudoers drop-in missing; run ./deploy.sh --setup-privileges): %w", err)
 	}
 	return nil
