@@ -35,6 +35,8 @@ Panel {
   // Which login-family action is in flight (login, logout, speed), so busy
   // labels on the shared loginProcess stay specific.
   property string loginAction: ""
+  // Which hotspot view is shown: "main" (cards) or "clients" (subview).
+  property string hotspotView: "main"
 
   // Paths
   readonly property string pluginDir: Qt.resolvedUrl(".").toString().replace(/^file:\/\//, "")
@@ -228,7 +230,9 @@ Panel {
   function teleClients() {
     if (!root.hotspotActive()) return "—"
     var h = root.status.hotspot
+    if (h === undefined || h === null) return "—"
     if (h.clients === undefined || h.clients === null) return "—"
+    if (Array.isArray(h.clients)) return h.clients.length.toString()
     return h.clients.toString()
   }
 
@@ -269,6 +273,30 @@ Panel {
   function vpnRowActive(row) {
     if (row === undefined || row === null) return false
     return row.active === true
+  }
+
+  function hotspotClients() {
+    if (root.status === null || root.status === undefined) return []
+    var h = root.status.hotspot
+    if (h === undefined || h === null) return []
+    var c = h.clients
+    if (c === undefined || c === null) return []
+    return c
+  }
+
+  function clientName(row) {
+    if (row === undefined || row === null) return ""
+    if (row.name === undefined || row.name === null || row.name === "") {
+      if (row.mac === undefined || row.mac === null) return ""
+      return row.mac
+    }
+    return row.name
+  }
+
+  function clientMac(row) {
+    if (row === undefined || row === null) return ""
+    if (row.mac === undefined || row.mac === null) return ""
+    return row.mac
   }
 
   function updatedText() {
@@ -347,6 +375,12 @@ Panel {
     hotspotProcess.running = true;
   }
 
+  function runHotspotKick(mac) {
+    root.actionBuffer = "";
+    hotspotProcess.command = ["bash", root.hotspotScript, "kick", mac];
+    hotspotProcess.running = true;
+  }
+
   function runVPN(action) {
     root.actionBuffer = "";
     vpnProcess.command = ["bash", root.vpnScript, action];
@@ -394,7 +428,7 @@ Panel {
       id: panelFlick
       anchors.fill: parent
       contentWidth: width
-      contentHeight: contentColumn.implicitHeight
+      contentHeight: root.hotspotView === "clients" ? clientsColumn.implicitHeight : contentColumn.implicitHeight
       clip: true
       boundsBehavior: Flickable.StopAtBounds
       flickableDirection: Flickable.VerticalFlick
@@ -405,6 +439,7 @@ Panel {
         id: contentColumn
         width: panelFlick.width
         spacing: Style.space(12)
+        visible: root.hotspotView === "main"
 
         // Header
         PanelHero {
@@ -824,6 +859,49 @@ Panel {
                 onClicked: root.runHotspot(root.hotspotActive() ? "stop" : "start")
               }
             }
+
+            Rectangle {
+              width: parent.width
+              height: root.btnHeight
+              radius: 6
+              color: root.stationEdge
+              opacity: hotspotProcess.running ? 0.55 : 1
+
+              Row {
+                anchors.centerIn: parent
+                spacing: 8
+
+                Text {
+                  text: "󰈐"
+                  font.family: root.fontFamily
+                  font.pixelSize: 14
+                  color: root.mint
+                }
+
+                Text {
+                  text: "Clients"
+                  font.family: root.fontFamily
+                  font.pixelSize: 12
+                  font.bold: true
+                  color: root.mint
+                }
+
+                Text {
+                  text: "▸"
+                  font.family: root.fontFamily
+                  font.pixelSize: 12
+                  font.bold: true
+                  color: root.mint
+                }
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                enabled: !hotspotProcess.running
+                onClicked: root.hotspotView = "clients"
+              }
+            }
           }
         }
 
@@ -1119,6 +1197,145 @@ Panel {
             font.pixelSize: 10
             color: root.stationFaint
           }
+        }
+      }
+
+      // ─── Hotspot clients subview (replaces the main content when active) ──
+      Column {
+        id: clientsColumn
+        width: panelFlick.width
+        spacing: Style.space(12)
+        visible: root.hotspotView === "clients"
+
+        Row {
+          width: parent.width
+          spacing: 8
+
+          Rectangle {
+            width: 34
+            height: 26
+            radius: 6
+            color: root.stationEdge
+
+            Text {
+              anchors.centerIn: parent
+              text: "←"
+              font.family: root.fontFamily
+              font.pixelSize: 13
+              color: root.foreground
+            }
+
+            MouseArea {
+              anchors.fill: parent
+              cursorShape: Qt.PointingHandCursor
+              onClicked: root.hotspotView = "main"
+            }
+          }
+
+          Text {
+            text: "Hotspot clients"
+            font.family: root.fontFamily
+            font.pixelSize: 13
+            font.bold: true
+            color: root.foreground
+            anchors.verticalCenter: parent.verticalCenter
+          }
+        }
+
+        Repeater {
+          model: root.hotspotClients()
+          delegate: Rectangle {
+            width: parent.width
+            height: 44
+            radius: 6
+            color: root.stationEdge
+
+            Row {
+              anchors.fill: parent
+              anchors.leftMargin: 10
+              anchors.rightMargin: 10
+              spacing: 8
+
+              Column {
+                width: parent.width - 68
+                anchors.verticalCenter: parent.verticalCenter
+                spacing: 2
+
+                Text {
+                  width: parent.width
+                  text: root.clientName(modelData)
+                  font.family: root.fontFamily
+                  font.pixelSize: 12
+                  font.bold: true
+                  color: root.foreground
+                  elide: Text.ElideRight
+                }
+
+                Text {
+                  width: parent.width
+                  text: (modelData && modelData.ip) ? modelData.ip : root.clientMac(modelData)
+                  font.family: root.fontFamily
+                  font.pixelSize: 10
+                  color: root.stationFaint
+                  elide: Text.ElideRight
+                }
+              }
+
+              Rectangle {
+                width: 60
+                height: 24
+                radius: 6
+                anchors.verticalCenter: parent.verticalCenter
+                color: hotspotProcess.running ? root.stationFaint : root.redWash
+                opacity: hotspotProcess.running ? 0.55 : 1
+
+                Text {
+                  anchors.centerIn: parent
+                  text: hotspotProcess.running ? "…" : "Kick"
+                  font.family: root.fontFamily
+                  font.pixelSize: 11
+                  font.bold: true
+                  color: root.failure
+                }
+
+                MouseArea {
+                  anchors.fill: parent
+                  cursorShape: Qt.PointingHandCursor
+                  enabled: !hotspotProcess.running
+                  onClicked: root.runHotspotKick(root.clientMac(modelData))
+                }
+              }
+            }
+          }
+        }
+
+        Text {
+          width: parent.width
+          visible: root.hotspotClients().length === 0 && !hotspotProcess.running
+          text: "No clients yet — connect a device to this network"
+          font.family: root.fontFamily
+          font.pixelSize: 12
+          color: root.stationFaint
+          wrapMode: Text.Wrap
+        }
+
+        Text {
+          width: parent.width
+          visible: hotspotProcess.running
+          text: "Working…"
+          font.family: root.fontFamily
+          font.pixelSize: 12
+          font.bold: true
+          color: root.mint
+        }
+
+        Text {
+          width: parent.width
+          text: "The list refreshes automatically after an action."
+          font.family: root.fontFamily
+          font.pixelSize: 11
+          color: root.stationFaint
+          wrapMode: Text.Wrap
         }
       }
     }

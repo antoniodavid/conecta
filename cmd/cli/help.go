@@ -20,6 +20,7 @@ Uso: conecta-cli <comando> [opciones]
   hotspot stop        Detiene el hotspot WiFi
   hotspot status      Muestra estado del hotspot
   hotspot clients     Lista clientes conectados
+  hotspot kick <mac>  Expulsa un cliente del hotspot (MAC aa:bb:cc:dd:ee:ff)
 
 ═══ NAT (Enrutamiento) ══════════════════════════════════════════
 

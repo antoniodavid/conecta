@@ -186,6 +186,11 @@ conecta-cli hotspot clients
 conecta-cli hotspot stop
 ```
 
+> `conecta-cli hotspot clients` lista los clientes del hotspot (lease DHCP +
+> tabla ARP). `conecta-cli hotspot kick <mac>` los deautentica vía
+> `iw station del`; requiere el drop-in de sudoers (si falla con un error de
+> autorización, re-ejecuta `./deploy.sh --setup-privileges`).
+
 ### Usar VPN
 
 ```bash
@@ -218,6 +223,7 @@ conecta-cli vpn toggle
 | `conecta-cli hotspot stop` | Detener hotspot |
 | `conecta-cli hotspot status` | Estado del hotspot |
 | `conecta-cli hotspot clients` | Listar clientes |
+| `conecta-cli hotspot kick <mac>` | Expulsar un cliente del hotspot |
 | `conecta-cli nat setup` | Configurar NAT |
 | `conecta-cli nat cleanup` | Limpiar NAT |
 | `conecta-cli nat status` | Estado de NAT |

@@ -128,10 +128,14 @@ else
 fi
 
 # 6c. status adapter forwards the new values verbatim: connection.status
-# "no portal"/"needs auth" and the hotspot ap_interface.
+# "no portal"/"needs auth", the hotspot ap_interface, and the clients array.
 cat > "$TMP/stub-no-portal" <<'EOF'
 #!/bin/bash
 if [ "${1:-}" = "hotspot" ]; then
+  if [ "${2:-}" = "clients" ]; then
+    echo '{"ok":true,"data":{"clients":[{"ip":"192.168.12.129","mac":"22:DF:51:DE:E8:40","name":"Xiaomi-11-Lite-5G-NE"}],"count":1}}'
+    exit 0
+  fi
   echo '{"ok":true,"data":{"active":true,"ssid":"RUBAN_WIFI","clients":2,"ap_interface":"ap0"}}'
   exit 0
 fi
@@ -141,6 +145,7 @@ EOF
 chmod +x "$TMP/stub-no-portal"
 out=$(CONNECTA_CLI="$TMP/stub-no-portal" bash "$BIN/omarchy-conecta-status" 2>/dev/null); rc=$?
 echo "$out" | jq -e '.connection.status == "no portal" and .hotspot.ap_interface == "ap0"' >/dev/null 2>&1 || { echo "FAIL: status adapter must forward no portal + ap_interface: [$out]"; FAIL=1; }
+echo "$out" | jq -e '.hotspot.clients | type == "array" and length == 1 and .[0].mac == "22:DF:51:DE:E8:40"' >/dev/null 2>&1 || { echo "FAIL: status adapter must forward hotspot.clients array: [$out]"; FAIL=1; }
 [ "$rc" -eq 0 ] || { echo "FAIL: status no-portal exit=$rc want 0"; FAIL=1; }
 
 cat > "$TMP/stub-needs-auth" <<'EOF'
@@ -351,6 +356,49 @@ if [ "$rc" -ne 3 ]; then
   FAIL=1
 else
   echo "PASS: vpn disconnect opfail exit 3"
+fi
+
+# 16. hotspot kick: forwards the MAC as fixed argv, verbatim passthrough.
+cat > "$TMP/stub-kick" <<'EOF'
+#!/bin/bash
+if [ "${1:-}" = "hotspot" ] && [ "${2:-}" = "kick" ]; then
+  echo "{\"ok\":true,\"data\":{\"action\":\"kick\",\"mac\":\"${3:-}\",\"iface\":\"ap0\"}}"
+  exit 0
+fi
+echo '{"ok":false,"error":{"code":"op_failed","message":"unexpected"}}'
+exit 3
+EOF
+chmod +x "$TMP/stub-kick"
+
+# 16a. kick with a MAC: verbatim passthrough + exit 0.
+out=$(CONNECTA_CLI="$TMP/stub-kick" bash "$BIN/omarchy-conecta-hotspot" kick 22:DF:51:DE:E8:40 2>/dev/null); rc=$?
+echo "$out" | jq -e '.ok == true and .data.mac == "22:DF:51:DE:E8:40"' >/dev/null 2>&1 || { echo "FAIL: hotspot kick MAC not passed verbatim: [$out]"; FAIL=1; }
+if [ "$rc" -ne 0 ]; then
+  echo "FAIL: hotspot kick exit=$rc want 0"
+  FAIL=1
+else
+  echo "PASS: hotspot kick passthrough exit 0"
+fi
+
+# 16b. kick without a MAC: invalid_input failure JSON + exit 2.
+out=$(CONNECTA_CLI="$TMP/stub-kick" bash "$BIN/omarchy-conecta-hotspot" kick 2>/dev/null); rc=$?
+echo "$out" | jq -e '.ok == false and .error.code == "invalid_input"' >/dev/null 2>&1 || { echo "FAIL: hotspot kick without mac must be invalid_input JSON: [$out]"; FAIL=1; }
+if [ "$rc" -ne 2 ]; then
+  echo "FAIL: hotspot kick no-mac exit=$rc want 2"
+  FAIL=1
+else
+  echo "PASS: hotspot kick no-mac exit 2"
+fi
+
+# 16c. kick CLI failure propagates its exit (never synthesized success).
+export STUB_MODE=opfail
+out=$(bash "$BIN/omarchy-conecta-hotspot" kick 22:DF:51:DE:E8:40 2>/dev/null); rc=$?
+echo "$out" | jq -e '.ok == false' >/dev/null 2>&1 || { echo "FAIL: hotspot kick opfail must be failure JSON: [$out]"; FAIL=1; }
+if [ "$rc" -ne 3 ]; then
+  echo "FAIL: hotspot kick opfail exit=$rc want 3"
+  FAIL=1
+else
+  echo "PASS: hotspot kick opfail exit 3"
 fi
 
 if [ "$FAIL" -ne 0 ]; then

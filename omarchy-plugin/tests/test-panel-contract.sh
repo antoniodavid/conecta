@@ -150,6 +150,16 @@ grep -q '"No portal"' "$ROOT/Panel.qml" \
   && pass "Panel maps no portal to a neutral pill" \
   || fail "Panel must map no portal to a neutral pill"
 
+# 8d. Hotspot clients subview: view switch, kick runner and UI markers.
+for marker in 'hotspotView' 'runHotspotKick' '"Clients"' '"Kick"'; do
+  grep -q "$marker" "$ROOT/Panel.qml" \
+    && pass "Panel contains $marker" \
+    || fail "Panel must contain $marker (clients subview)"
+done
+grep -q '\[\s*"bash",\s*root\.hotspotScript,\s*"kick"' "$ROOT/Panel.qml" \
+  && pass "Panel kicks via fixed argv" \
+  || fail "Panel must kick via [\"bash\", root.hotspotScript, \"kick\", mac]"
+
 # 9. BarWidget+Loader architecture: BarWidget root, Loader into Panel.qml,
 # single IpcHandler on conecta.network with toggle, injectPanel wiring
 # anchorItem/hostWidget plus live status/isOn, status poll ownership.

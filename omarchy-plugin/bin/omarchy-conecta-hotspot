@@ -1,6 +1,6 @@
 #!/bin/bash
 # omarchy:summary=Control Conecta WiFi hotspot
-# omarchy:args=[start|stop|status|clients]
+# omarchy:args=[start|stop|status|clients|kick]
 # omarchy:hidden=true
 #
 # Thin adapter over conecta-cli: passes CLI stdout through verbatim and
@@ -12,19 +12,28 @@ set -u
 CONNECTA_CLI="${CONNECTA_CLI:-conecta-cli}"
 
 usage_json() {
-  printf '%s' '{"ok":false,"error":{"code":"invalid_input","message":"usage: omarchy-conecta-hotspot {start|stop|status|clients}"}}'
+  printf '%s' '{"ok":false,"error":{"code":"invalid_input","message":"usage: omarchy-conecta-hotspot {start|stop|status|clients|kick}"}}'
 }
 
 ACTION="${1:-}"
 case "$ACTION" in
-  start|stop|status|clients) ;;
+  kick)
+    [ "${2:-}" != "" ] || {
+      echo "Usage: $0 kick <mac>" >&2
+      usage_json
+      exit 2
+    }
+    out=$("$CONNECTA_CLI" hotspot kick "$2" 2>/dev/null); rc=$?
+    ;;
+  start|stop|status|clients)
+    out=$("$CONNECTA_CLI" hotspot "$ACTION" 2>/dev/null); rc=$?
+    ;;
   *)
-    echo "Usage: $0 {start|stop|status|clients}" >&2
+    echo "Usage: $0 {start|stop|status|clients|kick}" >&2
     usage_json
     exit 2
     ;;
 esac
 
-out=$("$CONNECTA_CLI" hotspot "$ACTION" 2>/dev/null); rc=$?
 printf '%s' "$out"
 exit "$rc"

@@ -6,10 +6,11 @@
 # Grants NOPASSWD root ONLY for the exact commands conecta runs, each in the
 # exact argv form the CLI invokes (sudoers matches commands argument by
 # argument, so e.g. `/usr/bin/nmcli r wifi off` does NOT allow `nmcli` with
-# any other arguments). The portal-route grant uses per-argument sudoers `*`
-# wildcards for the gateway and interface, which vary per host config:
+# any other arguments). The portal-route and kick grants use per-argument
+# sudoers `*` wildcards for values that vary per host/config:
 # `/usr/bin/ip route add 10.180.0.0/16 via * dev *` allows only that exact
-# fixed command shape.
+# fixed command shape, and `/usr/bin/iw dev * station del * subtype 0xC`
+# allows kicking only with the fixed `iw station del ... subtype 0xC` shape.
 Cmnd_Alias CONECTA_CMDS = \
     /usr/bin/systemctl is-active create_ap, \
     /usr/bin/systemctl start create_ap, \
@@ -20,6 +21,7 @@ Cmnd_Alias CONECTA_CMDS = \
     /usr/bin/nmcli r wifi off, \
     /usr/bin/nmcli r wifi on, \
     /usr/bin/rfkill unblock wlan, \
-    /usr/bin/ip route add 10.180.0.0/16 via * dev *
+    /usr/bin/ip route add 10.180.0.0/16 via * dev *, \
+    /usr/bin/iw dev * station del * subtype 0xC
 
 __USER__ ALL=(root) NOPASSWD: CONECTA_CMDS

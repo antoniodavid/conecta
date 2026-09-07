@@ -217,6 +217,12 @@ func apInterface() string {
 	return parseAPInterface(string(out))
 }
 
+// APInterface is the exported form of apInterface: the name of the interface
+// currently in AP mode, or "" when none is found.
+func APInterface() string {
+	return apInterface()
+}
+
 // parseAPInterface parses `iw dev` output for the interface whose following
 // type line is "AP", mirroring the network package's same-line Interface +
 // following-type tracking. Unnamed/P2P-device blocks are skipped; no AP

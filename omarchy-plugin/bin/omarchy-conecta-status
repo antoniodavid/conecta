@@ -33,15 +33,18 @@ valid_or_false() {
 
 status_raw=$(cli_json status); status_rc=$?
 hotspot_raw=$(cli_json hotspot status); hotspot_rc=$?
+hotspot_clients_raw=$(cli_json hotspot clients); hc_rc=$?
 vpn_raw=$(cli_json vpn status); vpn_rc=$?
 
 status_json=$(valid_or_false "$status_raw")
 hotspot_json=$(valid_or_false "$hotspot_raw")
+hotspot_clients_json=$(valid_or_false "$hotspot_clients_raw")
 vpn_json=$(valid_or_false "$vpn_raw")
 
 merged=$(jq -n -c \
   --argjson st "$status_json" \
   --argjson hs "$hotspot_json" \
+  --argjson hc "$hotspot_clients_json" \
   --argjson vn "$vpn_json" \
   '{
     connection: {
@@ -55,7 +58,7 @@ merged=$(jq -n -c \
     hotspot: {
       active: ($hs.data.active // false),
       ssid: ($hs.data.ssid // ""),
-      clients: ($hs.data.clients // 0),
+      clients: ($hc.data.clients // []),
       ap_interface: ($hs.data.ap_interface // "")
     },
     vpn: {
@@ -69,7 +72,7 @@ merged=$(jq -n -c \
 printf '%s' "$merged"
 
 rc=0
-for c in "$status_rc" "$hotspot_rc" "$vpn_rc"; do
+for c in "$status_rc" "$hotspot_rc" "$hc_rc" "$vpn_rc"; do
   if [ "$c" -ne 0 ]; then rc="$c"; break; fi
 done
 exit "$rc"

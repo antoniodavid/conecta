@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"net/url"
@@ -283,8 +284,8 @@ func cmdSpeed(cfg *config.Config) {
 
 func cmdHotspot(cfg *config.Config, args []string) {
 	if len(args) < 1 {
-		fmt.Fprintf(os.Stderr, "hotspot requires an action (start|stop|status|clients)\n")
-		emitError("invalid_input", "hotspot requires an action (start|stop|status|clients)")
+		fmt.Fprintf(os.Stderr, "hotspot requires an action (start|stop|status|clients|kick)\n")
+		emitError("invalid_input", "hotspot requires an action (start|stop|status|clients|kick)")
 		return
 	}
 	rejectSubcommandFlags("hotspot", args[1:])
@@ -344,6 +345,25 @@ func cmdHotspot(cfg *config.Config, args []string) {
 			out = append(out, map[string]any{"ip": c.IP, "mac": c.MAC, "name": name})
 		}
 		emitResult(map[string]any{"clients": out, "count": len(out)})
+
+	case "kick":
+		if len(args) < 2 || args[1] == "" {
+			emitError("invalid_input", "hotspot kick requires a MAC address (e.g. aa:bb:cc:dd:ee:ff)")
+			return
+		}
+		iface := hotspot.APInterface()
+		if iface == "" {
+			iface = "ap0"
+		}
+		if err := hotspot.KickClient(iface, args[1]); err != nil {
+			if errors.Is(err, hotspot.ErrInvalidMAC) {
+				emitError("invalid_input", err.Error())
+				return
+			}
+			emitOpError("hotspot kick", err)
+			return
+		}
+		emitResult(map[string]any{"action": "kick", "mac": args[1], "iface": iface})
 
 	default:
 		fmt.Fprintf(os.Stderr, "unknown hotspot action: %s\n", action)
