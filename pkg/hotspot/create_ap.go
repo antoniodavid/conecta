@@ -25,7 +25,7 @@ func NewCreateAP(config *Config) *CreateAP {
 }
 
 // Start starts the hotspot
-func (c *CreateAP) Start() error {
+func (c *CreateAP) Start() (err error) {
 	// Privilege pre-check before any destructive step (fail closed, exit 4 upstream).
 	if err := checkAuthz(); err != nil {
 		return err
@@ -34,9 +34,15 @@ func (c *CreateAP) Start() error {
 	exec.Command("sudo", "killall", "hostapd").Run()
 	exec.Command("sudo", "killall", "dnsmasq").Run()
 
-	// Disable WiFi managed mode
+	// Disable WiFi managed mode. From here on, any failure must restore the
+	// radio so it is never left switched off.
 	exec.Command("sudo", "nmcli", "r", "wifi", "off").Run()
 	exec.Command("sudo", "rfkill", "unblock", "wlan").Run()
+	defer func() {
+		if err != nil {
+			restoreRadio()
+		}
+	}()
 
 	// Write config
 	if err := c.writeConfig(); err != nil {
@@ -58,14 +64,22 @@ func (c *CreateAP) Stop() error {
 		return err
 	}
 	cmd := exec.Command("sudo", "systemctl", "stop", "create_ap")
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("failed to stop create_ap: %w", err)
+	stopErr := cmd.Run()
+
+	// Always restore the radio, even when the stop failed, so WiFi is never
+	// left switched off. restoreRadio ignores its own error (best-effort).
+	restoreRadio()
+
+	if stopErr != nil {
+		return fmt.Errorf("failed to stop create_ap: %w", stopErr)
 	}
-
-	// Re-enable WiFi
-	exec.Command("sudo", "nmcli", "r", "wifi", "on").Run()
-
 	return nil
+}
+
+// restoreRadio re-enables the WiFi radio via nmcli. Errors are ignored:
+// it is best-effort recovery and must not mask the primary error.
+func restoreRadio() {
+	exec.Command("sudo", "nmcli", "r", "wifi", "on").Run()
 }
 
 // Status returns the current hotspot status
