@@ -231,9 +231,12 @@ Panel {
     if (!root.hotspotActive()) return "—"
     var h = root.status.hotspot
     if (h === undefined || h === null) return "—"
-    if (h.clients === undefined || h.clients === null) return "—"
-    if (Array.isArray(h.clients)) return h.clients.length.toString()
-    return h.clients.toString()
+    var c = h.clients
+    if (c === undefined || c === null) return "—"
+    // .length works for both JS arrays and QVariantList; never coerce the
+    // collection to a string (that renders "[object Object]").
+    if (c.length === undefined) return String(c)
+    return String(c.length)
   }
 
   function hotspotDetail() {
@@ -281,7 +284,11 @@ Panel {
     if (h === undefined || h === null) return []
     var c = h.clients
     if (c === undefined || c === null) return []
-    return c
+    // Normalize QVariantList into a plain JS array so Repeater and
+    // Array.isArray/toString behave identically to the JSON source.
+    var out = []
+    for (var i = 0; i < c.length; i++) out.push(c[i])
+    return out
   }
 
   function clientName(row) {
