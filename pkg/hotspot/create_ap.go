@@ -124,6 +124,11 @@ func (c *CreateAP) writeConfig() error {
 		internetIface = "enp3s0" // default
 	}
 
+	// Force the 2.4 GHz band: many older devices only see 2.4 GHz networks.
+	// HT20 (20 MHz width) keeps the SSID visible to legacy 802.11 clients that
+	// cannot join 40 MHz channels.
+	freqBand := normalizeFreqBand(c.config.FreqBand)
+
 	config := fmt.Sprintf(`CHANNEL=%s
 GATEWAY=%s
 WPA_VERSION=2
@@ -139,7 +144,7 @@ SHARE_METHOD=%s
 IEEE80211N=1
 IEEE80211AC=0
 IEEE80211AX=0
-HT_CAPAB=[HT40+]
+HT_CAPAB=[HT20]
 VHT_CAPAB=
 DRIVER=nl80211
 NO_VIRT=0
@@ -160,7 +165,7 @@ ADDN_HOSTS=`,
 		c.config.Channel,
 		c.config.Gateway,
 		c.config.Method,
-		c.config.FreqBand,
+		freqBand,
 		wifiIface,
 		internetIface,
 		c.config.SSID,
@@ -266,6 +271,18 @@ func (c *CreateAP) countClients() int {
 		return 0
 	}
 	return strings.Count(string(out), "Station ")
+}
+
+// normalizeFreqBand maps a configured band to the value create_ap expects.
+// The hotspot always runs on 2.4 GHz (legacy-device compatibility); an empty
+// or bare "2" value is normalized to "2.4", and "5"/other values are kept
+// verbatim for explicit opt-in.
+func normalizeFreqBand(freq string) string {
+	freq = strings.TrimSpace(freq)
+	if freq == "" || freq == "2" {
+		return "2.4"
+	}
+	return freq
 }
 
 // ParseIWInterfaces parses `iw dev` output for same-line "Interface <name>" entries.
