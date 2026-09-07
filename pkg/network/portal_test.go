@@ -151,8 +151,8 @@ func TestLoginVerdict(t *testing.T) {
 	}{
 		{name: "session page after login is success", page: "usted ya está conectado", wantErr: ""},
 		{name: "session marker ya conectado is success", page: "usuario ya conectado", wantErr: ""},
-		{name: "login page means rejected", page: `<form action="LoginServlet">Bienvenido</form>`, wantErr: "portal still requires authentication"},
-		{name: "login marker only means rejected", page: "LoginServlet", wantErr: "portal still requires authentication"},
+		{name: "login page means rejected", page: `<form action="LoginServlet">Bienvenido</form>`, wantErr: "check the username and password"},
+		{name: "login marker only means rejected", page: "LoginServlet", wantErr: "check the username and password"},
 		{name: "empty page fails closed", page: "", wantErr: "portal returned an unrecognized page"},
 		{name: "unknown page fails closed", page: "<html>proxy notice</html>", wantErr: "portal returned an unrecognized page"},
 	}
@@ -180,7 +180,7 @@ func TestVerifyLogin(t *testing.T) {
 		wantErr string // "" means success
 	}{
 		{name: "connected page is success", fetch: func() (string, error) { return "usted ya está conectado", nil }, wantErr: ""},
-		{name: "needs auth page is rejected", fetch: func() (string, error) { return `<form action="LoginServlet">Bienvenido</form>`, nil }, wantErr: "portal still requires authentication"},
+		{name: "needs auth page is rejected", fetch: func() (string, error) { return `<form action="LoginServlet">Bienvenido</form>`, nil }, wantErr: "check the username and password"},
 		{name: "unknown page fails closed", fetch: func() (string, error) { return "<html>proxy notice</html>", nil }, wantErr: "portal returned an unrecognized page"},
 		{name: "fetch error fails closed", fetch: func() (string, error) { return "", errors.New("boom") }, wantErr: "cannot verify login"},
 	}
@@ -196,6 +196,61 @@ func TestVerifyLogin(t *testing.T) {
 			}
 			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
 				t.Errorf("verifyLogin error = %v, want containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLoginPostVerdict(t *testing.T) {
+	tests := []struct {
+		name     string
+		postBody string
+		fetch    func() (string, error)
+		wantErr  string // "" means success
+	}{
+		{
+			name:     "already-connected marker in POST body fails closed",
+			postBody: `<script>usted ya está conectado</script>`,
+			fetch:    func() (string, error) { return "usted ya está conectado", nil },
+			wantErr:  "already has an active session",
+		},
+		{
+			name:     "ya conectado marker in POST body fails closed",
+			postBody: "usuario ya conectado",
+			fetch:    func() (string, error) { return "usted ya está conectado", nil },
+			wantErr:  "already has an active session",
+		},
+		{
+			name:     "no markers, verification still needs auth is credentials error",
+			postBody: `<form action="LoginServlet">`,
+			fetch:    func() (string, error) { return `<form action="LoginServlet">Bienvenido</form>`, nil },
+			wantErr:  "check the username and password",
+		},
+		{
+			name:     "no markers, verification session page is success",
+			postBody: `<form action="LoginServlet">`,
+			fetch:    func() (string, error) { return "usted ya está conectado", nil },
+			wantErr:  "",
+		},
+		{
+			name:     "no markers, verification GET fails closed",
+			postBody: "",
+			fetch:    func() (string, error) { return "", errors.New("boom") },
+			wantErr:  "cannot verify login",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := loginPostVerdict(tt.postBody, tt.fetch)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("loginPostVerdict = %v, want success", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("loginPostVerdict error = %v, want containing %q", err, tt.wantErr)
 			}
 		})
 	}

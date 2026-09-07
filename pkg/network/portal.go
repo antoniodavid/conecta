@@ -49,13 +49,19 @@ func (p *Portal) fetchPortalPage() (string, error) {
 // "LoginServlet"/"Bienvenido". Session markers win when both appear; any
 // other page is PortalNone (no portal state to report).
 func classifyPortalPage(html string) PortalStatus {
-	if strings.Contains(html, "ya está conectado") || strings.Contains(html, "ya conectado") {
+	if hasSessionMarkers(html) {
 		return PortalConnected
 	}
 	if strings.Contains(html, "LoginServlet") || strings.Contains(html, "Bienvenido") {
 		return PortalNeedsAuth
 	}
 	return PortalNone
+}
+
+// hasSessionMarkers reports whether a portal body carries the ETECSA
+// active-session markers.
+func hasSessionMarkers(html string) bool {
+	return strings.Contains(html, "ya está conectado") || strings.Contains(html, "ya conectado")
 }
 
 // NewPortal creates a new portal handler
@@ -192,6 +198,7 @@ func (p *Portal) Login(user, pass string) (*Connection, error) {
 		"usertype":    {extractInput(html, "usertype")},
 		"gotopage":    {extractInput(html, "gotopage")},
 		"successpage": {extractInput(html, "successpage")},
+		"currentURL":  {extractInput(html, "currentURL")},
 		"loggerId":    {extractInput(html, "loggerId")},
 		"lang":        {"es_ES"},
 		"CSRFHW":      {extractInput(html, "CSRFHW")},
@@ -226,15 +233,9 @@ func (p *Portal) Login(user, pass string) (*Connection, error) {
 		return conn, err
 	}
 	// parseLoginResponse returns nil only for PortalConnected (fast-path
-	// markers); any other status fails closed.
-	if conn.Status != PortalConnected {
-		conn.Status = PortalError
-		conn.LastError = fmt.Errorf("login failed: unrecognized portal response")
-		return conn, conn.LastError
-	}
-	// Never claim success from the POST alone: verify the session actually
-	// established by re-reading the portal page (short probe client, shared jar).
-	if verr := verifyLogin(p.fetchPortalPage); verr != nil {
+	// markers). Never claim success from the POST alone: the final verdict
+	// needs the POST body and a session re-check.
+	if verr := loginPostVerdict(respHTML, p.fetchPortalPage); verr != nil {
 		conn.Status = PortalError
 		conn.LastError = verr
 		return conn, verr
@@ -299,10 +300,26 @@ func loginVerdict(page string) error {
 	case PortalConnected:
 		return nil
 	case PortalNeedsAuth:
-		return fmt.Errorf("login failed: portal still requires authentication")
+		return fmt.Errorf("login failed: portal still requires authentication — check the username and password")
 	default:
 		return fmt.Errorf("login failed: portal returned an unrecognized page")
 	}
+}
+
+// loginPostVerdict decides the real login outcome after the POST response
+// was classified as connected. Evidence is the POST body plus a session
+// re-check (fetch):
+//   - POST body with active-session markers -> the account already holds an
+//     active session elsewhere; this client got no session, so fail closed
+//     with a specific error instead of claiming success.
+//   - otherwise re-check the portal page: a session page is the only
+//     success proof; a login page points at bad credentials; an unrecognized
+//     page or a fetch failure fails closed.
+func loginPostVerdict(postBody string, fetch func() (string, error)) error {
+	if hasSessionMarkers(postBody) {
+		return fmt.Errorf("login failed: the account already has an active session — log out on the other device or wait for it to expire")
+	}
+	return verifyLogin(fetch)
 }
 
 // verifyLogin re-reads the portal page after a login POST to confirm the
